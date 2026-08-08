@@ -162,14 +162,14 @@ function HomeScreen({ onAuthenticated }: { onAuthenticated: (user: User) => void
     <main className="home-shell">
       <nav className="home-nav">
         <button className="wordmark wordmark-button" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}><BrandMark /><span>STRIPE PROS</span></button>
-        <div className="home-nav-links"><a href="#how-it-works">How it works</a><a href="#built-for-stripers">For stripers</a></div>
+        <div className="home-nav-links"><a href="#how-it-works">How it works</a><a href="/workspace">Live workspace</a><a href="#built-for-stripers">For stripers</a></div>
         <div className="home-nav-actions"><button className="home-login" onClick={() => setAuthMode("signin")}>Log in</button><button className="home-start" onClick={() => setAuthMode("signup")}>Get started <span>→</span></button></div>
       </nav>
       <section className="home-hero">
         <div className="hero-badge"><i /> PURPOSE-BUILT FOR PARKING LOT CONTRACTORS</div>
         <h1>From address to<br /><em>quote in minutes.</em></h1>
         <p>Measure the lot from your desk, price every stripe, and send a proposal that wins the job.</p>
-        <div className="hero-actions"><button onClick={() => setAuthMode("signup")}>Start quoting free <span>→</span></button><a href="#product-demo">See how it works <span>↓</span></a></div>
+        <div className="hero-actions"><a className="hero-workspace-action" href="/workspace">Open the live workspace <span>→</span></a><a href="#product-demo">See how it works <span>↓</span></a></div>
       </section>
       <div id="product-demo"><ProductDemo /></div>
       <section className="workflow-section" id="how-it-works">

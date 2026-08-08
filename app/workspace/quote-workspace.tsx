@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import type { Map as LeafletMap, Layer as LeafletLayer } from "leaflet";
+import type { Map as LeafletMap, Layer as LeafletLayer, TileLayer } from "leaflet";
 import Link from "next/link";
 import turfArea from "@turf/area";
 import turfLength from "@turf/length";
@@ -40,14 +40,22 @@ function BrandMark() {
   return <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>;
 }
 
-export function QuoteWorkspace() {
+const SAN_DIEGO_LOT = {
+  address: "Snapdragon Stadium — West Parking Lot, 2101 Stadium Way, San Diego, CA 92108",
+  center: [32.7849, -117.1258] as [number, number],
+};
+
+export function QuoteWorkspace({ nearMapEnabled }: { nearMapEnabled: boolean }) {
   const mapElementRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);
+  const baseLayerRef = useRef<TileLayer | null>(null);
+  const labelLayerRef = useRef<TileLayer | null>(null);
   const layerByMeasurementRef = useRef(new Map<string, LeafletLayer>());
   const [drawMode, setDrawMode] = useState<DrawMode | null>(null);
+  const [mapStyle, setMapStyle] = useState<"aerial" | "street">("aerial");
   const [view, setView] = useState<"takeoff" | "saved" | "customers">("takeoff");
-  const [address, setAddress] = useState("742 Evergreen Industrial Way, Sacramento, CA");
-  const [siteAddress, setSiteAddress] = useState("742 Evergreen Industrial Way, Sacramento, CA");
+  const [address, setAddress] = useState(SAN_DIEGO_LOT.address);
+  const [siteAddress, setSiteAddress] = useState(SAN_DIEGO_LOT.address);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [results, setResults] = useState<GeocodeResult[]>([]);
@@ -78,13 +86,43 @@ export function QuoteWorkspace() {
       (window as unknown as { L: typeof L }).L = L;
       await import("@geoman-io/leaflet-geoman-free");
 
-      map = L.map(mapElementRef.current, { center: [38.58, -121.49], zoom: 17, zoomControl: false });
+      map = L.map(mapElementRef.current, { center: SAN_DIEGO_LOT.center, zoom: 18, zoomControl: false, zoomSnap: .25 });
       mapRef.current = map;
       L.control.zoom({ position: "bottomright" }).addTo(map);
-      L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
-        maxZoom: 20,
+
+      let aerialUrl = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+      let aerialAttribution = "Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community";
+      let aerialMaxZoom = 20;
+      if (nearMapEnabled) {
+        try {
+          const response = await fetch("/api/map-config");
+          const config = await response.json() as { provider?: string; tileUrl?: string };
+          if (config.provider === "nearmap" && config.tileUrl) {
+            aerialUrl = config.tileUrl;
+            aerialAttribution = "Aerial imagery © Nearmap";
+            aerialMaxZoom = 22;
+          }
+        } catch { /* retain the public Esri fallback */ }
+      }
+
+      baseLayerRef.current = L.tileLayer(aerialUrl, {
+        maxZoom: aerialMaxZoom,
         crossOrigin: "anonymous",
-        attribution: "Tiles © Esri — commercial terms must be reviewed before launch",
+        attribution: aerialAttribution,
+      }).addTo(map) as TileLayer;
+
+      if (!nearMapEnabled) {
+        labelLayerRef.current = L.tileLayer("https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}", {
+          maxZoom: 20,
+          crossOrigin: "anonymous",
+          attribution: "Labels © Esri",
+          pane: "overlayPane",
+        }).addTo(map) as TileLayer;
+      }
+
+      L.marker(SAN_DIEGO_LOT.center, {
+        icon: L.divIcon({ className: "site-pin", html: "<span></span>", iconSize: [30, 38], iconAnchor: [15, 36] }),
+        interactive: false,
       }).addTo(map);
 
       map.on("pm:create", (rawEvent) => {
@@ -113,7 +151,7 @@ export function QuoteWorkspace() {
       map?.remove();
       mapRef.current = null;
     };
-  }, []);
+  }, [nearMapEnabled]);
 
   const mapCounts = useMemo(() => ({
     stalls: measurements.filter((item) => item.linkedItem === "stalls").reduce((sum, item) => sum + item.value, 0),
@@ -170,6 +208,31 @@ export function QuoteWorkspace() {
     setDrawMode(mode);
   }
 
+  async function switchMapStyle(style: "aerial" | "street") {
+    const map = mapRef.current;
+    if (!map || style === mapStyle) return;
+    if (baseLayerRef.current) map.removeLayer(baseLayerRef.current);
+    if (labelLayerRef.current && map.hasLayer(labelLayerRef.current)) map.removeLayer(labelLayerRef.current);
+    const L = await import("leaflet");
+    if (style === "street") {
+      baseLayerRef.current = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", {
+        maxZoom: 20,
+        crossOrigin: "anonymous",
+        attribution: "Map © Esri and contributors",
+      }).addTo(map);
+    } else {
+      const response = nearMapEnabled ? await fetch("/api/map-config") : null;
+      const config = response ? await response.json() as { provider?: string; tileUrl?: string } : null;
+      baseLayerRef.current = L.tileLayer(config?.tileUrl ?? "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+        maxZoom: config?.provider === "nearmap" ? 22 : 20,
+        crossOrigin: "anonymous",
+        attribution: config?.provider === "nearmap" ? "Aerial imagery © Nearmap" : "Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+      }).addTo(map);
+      if (labelLayerRef.current) labelLayerRef.current.addTo(map);
+    }
+    setMapStyle(style);
+  }
+
   function removeMeasurement(id: string) {
     const layer = layerByMeasurementRef.current.get(id);
     if (layer && mapRef.current) mapRef.current.removeLayer(layer);
@@ -206,7 +269,7 @@ export function QuoteWorkspace() {
       page.drawText("STRIPE PROS", { x: 42, y: 742, size: 24, font: bold, color: ink });
       page.drawText("PARKING LOT STRIPING PROPOSAL", { x: 42, y: 717, size: 9, font: bold, color: ink });
       page.drawText("Prepared for", { x: 42, y: 654, size: 8, font: bold, color: rgb(.42, .4, .36) });
-      page.drawText("Evergreen Distribution", { x: 42, y: 630, size: 18, font: bold, color: ink });
+      page.drawText("San Diego Stadium Operations", { x: 42, y: 630, size: 18, font: bold, color: ink });
       page.drawText(siteAddress.slice(0, 88), { x: 42, y: 612, size: 9, font: regular, color: rgb(.38, .37, .34) });
 
       let y = 565;
@@ -268,7 +331,7 @@ export function QuoteWorkspace() {
     <main className="quote-workspace-shell">
       <header className="quote-app-header">
         <Link className="quote-brand" href="/"><BrandMark /><span>STRIPE PROS</span></Link>
-        <div className="quote-header-site"><span>ESTIMATE</span><strong>Evergreen Distribution</strong><small>{siteAddress}</small></div>
+        <div className="quote-header-site"><span>ESTIMATE</span><strong>San Diego Stadium Operations</strong><small>{siteAddress}</small></div>
         <div className="quote-header-actions"><span className="autosave-status"><i /> LOCAL DEMO</span><button onClick={saveEstimate}>SAVE DRAFT</button><button className="export-button" onClick={exportProposal} disabled={exporting}>{exporting ? "GENERATING…" : "EXPORT PROPOSAL"} <b>→</b></button></div>
       </header>
       <aside className="quote-sidebar">
@@ -283,12 +346,13 @@ export function QuoteWorkspace() {
       {view === "takeoff" && <section className="takeoff-main">
         <div className="takeoff-toolbar">
           <form onSubmit={searchAddress} className="workspace-address-search"><span>⌕</span><input value={address} onChange={(event) => setAddress(event.target.value)} aria-label="Property address" /><button disabled={searching}>{searching ? "SEARCHING…" : "FIND LOT"}</button></form>
-          <div className="imagery-chip"><i /> ESRI WORLD IMAGERY <span>GSD UNKNOWN</span></div>
+          <div className="imagery-chip"><i /> {nearMapEnabled ? "NEARMAP VERTICAL" : "ESRI HYBRID AERIAL"} <span>{nearMapEnabled ? "MEASUREMENT IMAGERY" : "LIVE DEMO · NEARMAP READY"}</span></div>
           {results.length > 1 && <div className="address-results">{results.map((result) => <button key={`${result.lat}-${result.lng}`} onClick={() => selectAddress(result)}>{result.label}</button>)}</div>}
           {searchError && <p className="workspace-error">{searchError}</p>}
         </div>
         <div className="map-stage">
           <div ref={mapElementRef} className="live-map" />
+          <div className="map-style-switch" aria-label="Map style"><button className={mapStyle === "aerial" ? "active" : ""} onClick={() => void switchMapStyle("aerial")}>SATELLITE</button><button className={mapStyle === "street" ? "active" : ""} onClick={() => void switchMapStyle("street")}>STREET</button></div>
           <div className="map-draw-tools" aria-label="Map measurement tools"><button className={drawMode === "Polygon" ? "active" : ""} onClick={() => startDrawing("Polygon")}>▰ AREA</button><button className={drawMode === "Line" ? "active" : ""} onClick={() => startDrawing("Line")}>╱ LENGTH</button><button className={drawMode === "Marker" ? "active" : ""} onClick={() => startDrawing("Marker")}>• COUNT</button></div>
           <div className="map-instructions"><strong>DRAW THE TAKEOFF</strong><span>Polygon = paved area</span><span>Line = curb footage</span><span>Marker = parking stall</span></div>
           <div className="assist-banner"><span>SMART DETECTION</span><strong>Connector ready for a future vision service</strong><small>Manual tools are live and editable today.</small></div>
@@ -316,9 +380,9 @@ export function QuoteWorkspace() {
         </aside>
       </section>}
 
-      {view === "saved" && <section className="workspace-list-view"><header><div><p>ESTIMATES</p><h1>Quote pipeline</h1></div><button onClick={() => setView("takeoff")}>＋ NEW ESTIMATE</button></header><div className="pipeline-tabs"><button className="active">ALL <b>{saved.length}</b></button><button>DRAFT</button><button>SENT</button><button>APPROVED</button></div><div className="saved-table"><div className="saved-table-head"><span>SITE</span><span>MEASUREMENTS</span><span>TOTAL</span><span>UPDATED</span></div>{!saved.length ? <div className="saved-empty"><strong>No saved estimates yet.</strong><span>Build a takeoff and save the draft to see it here.</span><button onClick={() => setView("takeoff")}>START A TAKEOFF</button></div> : saved.map((estimate) => <button key={estimate.id} className="saved-row" onClick={() => { setSiteAddress(estimate.address); setAddress(estimate.address); setView("takeoff"); }}><span><strong>Evergreen Distribution</strong><small>{estimate.address}</small></span><span>{estimate.measurements}</span><b>{currency.format(estimate.total)}</b><time>{new Date(estimate.updatedAt).toLocaleDateString()}</time></button>)}</div></section>}
+      {view === "saved" && <section className="workspace-list-view"><header><div><p>ESTIMATES</p><h1>Quote pipeline</h1></div><button onClick={() => setView("takeoff")}>＋ NEW ESTIMATE</button></header><div className="pipeline-tabs"><button className="active">ALL <b>{saved.length}</b></button><button>DRAFT</button><button>SENT</button><button>APPROVED</button></div><div className="saved-table"><div className="saved-table-head"><span>SITE</span><span>MEASUREMENTS</span><span>TOTAL</span><span>UPDATED</span></div>{!saved.length ? <div className="saved-empty"><strong>No saved estimates yet.</strong><span>Build a takeoff and save the draft to see it here.</span><button onClick={() => setView("takeoff")}>START A TAKEOFF</button></div> : saved.map((estimate) => <button key={estimate.id} className="saved-row" onClick={() => { setSiteAddress(estimate.address); setAddress(estimate.address); setView("takeoff"); }}><span><strong>San Diego Stadium Operations</strong><small>{estimate.address}</small></span><span>{estimate.measurements}</span><b>{currency.format(estimate.total)}</b><time>{new Date(estimate.updatedAt).toLocaleDateString()}</time></button>)}</div></section>}
 
-      {view === "customers" && <section className="workspace-list-view"><header><div><p>CUSTOMERS</p><h1>Customer directory</h1></div><button>＋ ADD CUSTOMER</button></header><div className="customer-cards"><article><span>ED</span><div><strong>Evergreen Distribution</strong><small>Facilities Management</small><p>742 Evergreen Industrial Way<br />Sacramento, CA</p></div><b>1 ESTIMATE</b></article><article className="customer-placeholder"><strong>Minimal CRM by design.</strong><p>Customer and site records stay attached to every estimate without adding scheduling or dispatch clutter.</p></article></div></section>}
+      {view === "customers" && <section className="workspace-list-view"><header><div><p>CUSTOMERS</p><h1>Customer directory</h1></div><button>＋ ADD CUSTOMER</button></header><div className="customer-cards"><article><span>SD</span><div><strong>San Diego Stadium Operations</strong><small>Facilities Management</small><p>2101 Stadium Way<br />San Diego, CA 92108</p></div><b>1 ESTIMATE</b></article><article className="customer-placeholder"><strong>Minimal CRM by design.</strong><p>Customer and site records stay attached to every estimate without adding scheduling or dispatch clutter.</p></article></div></section>}
     </main>
   );
 }

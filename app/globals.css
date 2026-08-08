@@ -311,6 +311,12 @@ button { cursor: pointer; }
 .map-draw-tools button:first-child { border-radius: 4px 0 0 4px; }
 .map-draw-tools button:last-child { border: 0; border-radius: 0 4px 4px 0; }
 .map-draw-tools button.active { background: var(--amber); }
+.map-style-switch { position: absolute; z-index: 800; top: 13px; left: 229px; display: flex; padding: 3px; border: 1px solid rgba(255,255,255,.25); border-radius: 5px; background: rgba(17,17,15,.88); box-shadow: 0 4px 15px rgba(0,0,0,.2); }
+.map-style-switch button { height: 28px; border: 0; border-radius: 3px; background: transparent; color: #d2cfc7; padding: 0 10px; font: 900 7px Arial; letter-spacing: .08em; }
+.map-style-switch button.active { background: #fff; color: var(--ink); }
+.site-pin { position: relative; }
+.site-pin::before { content: ""; position: absolute; left: 3px; top: 1px; width: 24px; height: 24px; transform: rotate(45deg); border: 3px solid #fff; border-radius: 50% 50% 50% 0; background: var(--amber); box-shadow: 0 3px 9px rgba(0,0,0,.42); }
+.site-pin span { position: absolute; z-index: 1; left: 11px; top: 9px; width: 8px; height: 8px; border-radius: 50%; background: var(--ink); }
 .map-instructions strong { margin-bottom: 3px; color: var(--amber); font: 900 8px monospace; letter-spacing: .1em; }
 .map-instructions span { color: #cfccc3; font-size: 8px; }
 .assist-banner { position: absolute; z-index: 800; left: 50%; bottom: 22px; width: min(420px, calc(100% - 42px)); transform: translateX(-50%); display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; border-left: 4px solid var(--amber); background: rgba(17,17,15,.91); padding: 10px 13px; color: white; }
@@ -493,6 +499,7 @@ button { cursor: pointer; }
   .imagery-chip { display: none; }
   .workspace-address-search { min-height: 42px; flex: none; width: 100%; }
   .map-instructions { display: none; }
+  .map-style-switch { top: 59px; left: 13px; }
   .assist-banner { bottom: 14px; }
   .manual-counts { grid-template-columns: 1fr; }
   .manual-counts .panel-section-title { grid-column: 1; }

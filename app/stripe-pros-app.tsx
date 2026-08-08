@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import type { Map as LeafletMap } from "leaflet";
 import { PRICE_UNITS, UNIT_LABELS, type PriceUnit } from "@/lib/price-book";
 
 type User = { id: string; email: string; companyName: string };
@@ -66,11 +67,35 @@ function AuthModal({ onAuthenticated, onClose, initialMode }: { onAuthenticated:
   );
 }
 
-const DEMO_ADDRESS = "742 Evergreen Industrial Way, Sacramento, CA";
+const DEMO_ADDRESS = "2101 Stadium Way, San Diego, CA 92108";
 
 function ProductDemo() {
+  const demoMapElementRef = useRef<HTMLDivElement>(null);
+  const demoMapRef = useRef<LeafletMap | null>(null);
   const [phase, setPhase] = useState<"typing" | "ready" | "scanning" | "quote">("typing");
   const [address, setAddress] = useState("");
+
+  useEffect(() => {
+    if (!demoMapElementRef.current || demoMapRef.current) return;
+    let active = true;
+    let map: LeafletMap | null = null;
+    void (async () => {
+      const L = await import("leaflet");
+      if (!active || !demoMapElementRef.current) return;
+      map = L.map(demoMapElementRef.current, { center: [32.7849, -117.1258], zoom: 18, zoomControl: false, attributionControl: true, dragging: false, scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false, touchZoom: false });
+      demoMapRef.current = map;
+      let tileUrl = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+      let attribution = "Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community";
+      let maxZoom = 20;
+      try {
+        const response = await fetch("/api/map-config");
+        const config = await response.json() as { provider?: string; tileUrl?: string };
+        if (config.provider === "nearmap" && config.tileUrl) { tileUrl = config.tileUrl; attribution = "Aerial imagery © Nearmap"; maxZoom = 22; }
+      } catch { /* retain Esri aerial imagery */ }
+      L.tileLayer(tileUrl, { maxZoom, crossOrigin: "anonymous", attribution }).addTo(map);
+    })();
+    return () => { active = false; map?.remove(); demoMapRef.current = null; };
+  }, []);
 
   useEffect(() => {
     if (phase !== "typing") return;
@@ -124,13 +149,7 @@ function ProductDemo() {
         </div>
         <div className="demo-output">
           <div className={`lot-canvas ${phase}`}>
-            <div className="road-label">EVERGREEN INDUSTRIAL WAY</div>
-            <div className="building"><span>742</span></div>
-            <div className="island island-one" /><div className="island island-two" />
-            <div className="parking-row row-one" />
-            <div className="parking-row row-two" />
-            <div className="parking-row row-three" />
-            <div className="ada-space ada-one">ADA</div><div className="ada-space ada-two">ADA</div>
+            <div ref={demoMapElementRef} className="demo-real-map" aria-label="Aerial imagery of the Snapdragon Stadium west parking lot" />
             <div className="lot-boundary"><i /><i /><i /><i /></div>
             {phase === "scanning" && <div className="scan-line"><span>MEASURING SITE</span></div>}
             {(phase === "scanning" || phase === "quote") && <div className="scan-hud"><span><i /> IMAGERY LOCKED</span><strong>{phase === "quote" ? "MEASUREMENT COMPLETE" : "SCANNING STRIPING LAYOUT"}</strong></div>}
@@ -138,7 +157,7 @@ function ProductDemo() {
           </div>
           <div className={`quote-preview ${phase === "quote" ? "revealed" : ""}`}>
             <div className="quote-top"><span><BrandMark /> STRIPE PROS</span><b>PROPOSAL #SP-1042</b></div>
-            <div className="quote-site"><small>PREPARED FOR</small><strong>Evergreen Distribution</strong><span>742 Evergreen Industrial Way · Sacramento, CA</span></div>
+            <div className="quote-site"><small>PREPARED FOR</small><strong>San Diego Stadium Operations</strong><span>2101 Stadium Way · San Diego, CA</span></div>
             <div className="quote-lines">
               <div><span>Standard stalls — restripe <small>84 × $5.00</small></span><b>$420.00</b></div>
               <div><span>ADA stalls + symbols <small>2 × $35.00</small></span><b>$70.00</b></div>
@@ -177,7 +196,6 @@ function HomeScreen({ onAuthenticated }: { onAuthenticated: (user: User) => void
         <h2>Drive less. Quote more.</h2>
         <div className="workflow-grid">
           <article><span>01</span><div className="workflow-icon address-icon">⌖</div><h3>Enter an address</h3><p>Open current aerial imagery for any customer site—right from your office.</p></article>
-          <article><span>02</span><div className="workflow-icon measure-icon">⌗</div><h3>Measure the work</h3><p>Trace lots and curbs, count stalls, and keep every measurement attached to the quote.</p></article>
           <article><span>03</span><div className="workflow-icon quote-icon">$</div><h3>Send the proposal</h3><p>Your pricing becomes a clean, branded proposal with an annotated site map.</p></article>
         </div>
       </section>

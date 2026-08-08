@@ -29,6 +29,7 @@ type QuoteItem = {
 
 type GeocodeResult = { label: string; lat: number; lng: number };
 type SavedEstimate = { id: string; address: string; total: number; measurements: number; updatedAt: string };
+type IntegrationStatus = { jobber: boolean; quickbooks: boolean; hubspot: boolean; webhook: boolean };
 type DrawLayer = LeafletLayer & { toGeoJSON(): Parameters<typeof turfArea>[0] };
 type DrawMode = "Polygon" | "Line" | "Marker";
 type GeomanMap = LeafletMap & { pm: { enableDraw(shape: DrawMode, options?: Record<string, unknown>): void; disableDraw(): void } };
@@ -38,6 +39,42 @@ const number = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 
 function BrandMark() {
   return <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>;
+}
+
+function IntegrationHub({ address, total, itemCount }: { address: string; total: number; itemCount: number }) {
+  const [status, setStatus] = useState<IntegrationStatus>({ jobber: false, quickbooks: false, hubspot: false, webhook: false });
+  const [sending, setSending] = useState<"hubspot" | "webhook" | null>(null);
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/integrations/status").then((response) => response.json()).then((data: IntegrationStatus) => { if (active) setStatus(data); }).catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+
+  async function exportEstimate(provider: "hubspot" | "webhook") {
+    setSending(provider);
+    setMessage("");
+    try {
+      const response = await fetch("/api/integrations/export", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider, address, total, itemCount }) });
+      const result = await response.json() as { message?: string; error?: string };
+      setMessage(response.ok ? result.message || "Estimate exported." : result.error || "Export failed.");
+    } catch { setMessage("The integration could not be reached."); }
+    finally { setSending(null); }
+  }
+
+  return <section className="workspace-list-view integration-view">
+    <header><div><p>CONNECTED WORKFLOW</p><h1>Integrations</h1></div><span className="integration-research-badge">RESEARCHED FOR PAVEMENT CONTRACTORS</span></header>
+    <div className="integration-intro"><strong>Quote here. Run the job where your team already works.</strong><p>Stripe Pros keeps takeoff and pricing focused, then hands approved work to field-service, CRM, and accounting systems.</p></div>
+    <div className="integration-grid">
+      <article className="integration-card recommended"><div className="integration-rank">01</div><div className="integration-logo jobber-logo">J</div><div className="integration-card-copy"><span>BEST FIELD-SERVICE FIT</span><h2>Jobber</h2><p>Customers, quotes, jobs, scheduling, crews, invoices, and client communications. Jobber specifically markets a paving workflow and exposes a documented GraphQL/OAuth API.</p><div className="integration-tags"><b>CUSTOMERS</b><b>JOBS</b><b>SCHEDULE</b><b>INVOICES</b></div></div><div className="integration-action"><i className={status.jobber ? "ready" : ""} />{status.jobber ? "APP CREDENTIALS READY" : "OAUTH APP REQUIRED"}<small>Authorization flow activates after a Jobber developer app is registered.</small></div></article>
+      <article className="integration-card"><div className="integration-rank">02</div><div className="integration-logo qb-logo">qb</div><div className="integration-card-copy"><span>ACCOUNTING STANDARD</span><h2>QuickBooks Online</h2><p>Send approved customers, service items, and invoices to the accounting system most contractors already give their bookkeeper.</p><div className="integration-tags"><b>CUSTOMERS</b><b>ITEMS</b><b>INVOICES</b><b>PAYMENTS</b></div></div><div className="integration-action"><i className={status.quickbooks ? "ready" : ""} />{status.quickbooks ? "APP CREDENTIALS READY" : "INTUIT APP REQUIRED"}<small>Requires an Intuit developer app and company authorization.</small></div></article>
+      <article className="integration-card"><div className="integration-rank">03</div><div className="integration-logo hubspot-logo">H</div><div className="integration-card-copy"><span>BEST SALES CRM</span><h2>HubSpot</h2><p>Create a deal from the current estimate for commercial property-manager follow-up, pipeline reporting, and sales automation.</p><div className="integration-tags"><b>CONTACTS</b><b>COMPANIES</b><b>DEALS</b></div></div><div className="integration-action">{status.hubspot ? <button onClick={() => void exportEstimate("hubspot")} disabled={sending === "hubspot"}>{sending === "hubspot" ? "SENDING…" : `SEND ${currency.format(total)} DEAL →`}</button> : <><i />PRIVATE APP TOKEN NEEDED<small>Add the token to enable one-click deal export.</small></>}</div></article>
+      <article className="integration-card"><div className="integration-rank">04</div><div className="integration-logo webhook-logo">↗</div><div className="integration-card-copy"><span>WIDEST COMPATIBILITY</span><h2>Zapier / Make webhook</h2><p>Send an estimate-ready event to QuoteIQ, Projul, Monday, Airtable, or another system through an automation webhook.</p><div className="integration-tags"><b>ESTIMATE EVENT</b><b>8,000+ APPS</b></div></div><div className="integration-action">{status.webhook ? <button onClick={() => void exportEstimate("webhook")} disabled={sending === "webhook"}>{sending === "webhook" ? "SENDING…" : "SEND TEST ESTIMATE →"}</button> : <><i />WEBHOOK URL NEEDED<small>Paste a Zapier or Make catch-hook URL in site settings.</small></>}</div></article>
+    </div>
+    {message && <p className="integration-message">{message}</p>}
+    <div className="partner-strip"><div><span>PARTNER ACCESS NEEDED</span><strong>Bitumio · PROcru · PavementSoft · QuoteIQ full CRM sync</strong></div><p>These purpose-built pavement platforms do not expose a complete public CRM API. Stripe Pros can add native adapters when their teams provide partner credentials or API documentation.</p></div>
+  </section>;
 }
 
 const SAN_DIEGO_LOT = {
@@ -53,7 +90,7 @@ export function QuoteWorkspace({ nearMapEnabled }: { nearMapEnabled: boolean }) 
   const layerByMeasurementRef = useRef(new Map<string, LeafletLayer>());
   const [drawMode, setDrawMode] = useState<DrawMode | null>(null);
   const [mapStyle, setMapStyle] = useState<"aerial" | "street">("aerial");
-  const [view, setView] = useState<"takeoff" | "saved" | "customers">("takeoff");
+  const [view, setView] = useState<"takeoff" | "saved" | "customers" | "integrations">("takeoff");
   const [address, setAddress] = useState(SAN_DIEGO_LOT.address);
   const [siteAddress, setSiteAddress] = useState(SAN_DIEGO_LOT.address);
   const [searching, setSearching] = useState(false);
@@ -339,6 +376,7 @@ export function QuoteWorkspace({ nearMapEnabled }: { nearMapEnabled: boolean }) 
         <button className={view === "takeoff" ? "active" : ""} onClick={() => setView("takeoff")}><span>⌖</span> TAKEOFF</button>
         <button className={view === "saved" ? "active" : ""} onClick={() => setView("saved")}><span>▤</span> ESTIMATES <b>{saved.length}</b></button>
         <button className={view === "customers" ? "active" : ""} onClick={() => setView("customers")}><span>◎</span> CUSTOMERS</button>
+        <button className={view === "integrations" ? "active" : ""} onClick={() => setView("integrations")}><span>↔</span> INTEGRATIONS <b>NEW</b></button>
         <Link href="/"><span>↙</span> MARKETING SITE</Link>
         <div className="quote-sidebar-foot"><p>TAKEOFF STATUS</p><strong>{measurements.length ? "MEASUREMENTS READY" : "START DRAWING"}</strong><span>{measurements.length} mapped object{measurements.length === 1 ? "" : "s"}</span></div>
       </aside>
@@ -383,6 +421,8 @@ export function QuoteWorkspace({ nearMapEnabled }: { nearMapEnabled: boolean }) 
       {view === "saved" && <section className="workspace-list-view"><header><div><p>ESTIMATES</p><h1>Quote pipeline</h1></div><button onClick={() => setView("takeoff")}>＋ NEW ESTIMATE</button></header><div className="pipeline-tabs"><button className="active">ALL <b>{saved.length}</b></button><button>DRAFT</button><button>SENT</button><button>APPROVED</button></div><div className="saved-table"><div className="saved-table-head"><span>SITE</span><span>MEASUREMENTS</span><span>TOTAL</span><span>UPDATED</span></div>{!saved.length ? <div className="saved-empty"><strong>No saved estimates yet.</strong><span>Build a takeoff and save the draft to see it here.</span><button onClick={() => setView("takeoff")}>START A TAKEOFF</button></div> : saved.map((estimate) => <button key={estimate.id} className="saved-row" onClick={() => { setSiteAddress(estimate.address); setAddress(estimate.address); setView("takeoff"); }}><span><strong>San Diego Stadium Operations</strong><small>{estimate.address}</small></span><span>{estimate.measurements}</span><b>{currency.format(estimate.total)}</b><time>{new Date(estimate.updatedAt).toLocaleDateString()}</time></button>)}</div></section>}
 
       {view === "customers" && <section className="workspace-list-view"><header><div><p>CUSTOMERS</p><h1>Customer directory</h1></div><button>＋ ADD CUSTOMER</button></header><div className="customer-cards"><article><span>SD</span><div><strong>San Diego Stadium Operations</strong><small>Facilities Management</small><p>2101 Stadium Way<br />San Diego, CA 92108</p></div><b>1 ESTIMATE</b></article><article className="customer-placeholder"><strong>Minimal CRM by design.</strong><p>Customer and site records stay attached to every estimate without adding scheduling or dispatch clutter.</p></article></div></section>}
+
+      {view === "integrations" && <IntegrationHub address={siteAddress} total={calculation.total} itemCount={quoteItems.length} />}
     </main>
   );
 }

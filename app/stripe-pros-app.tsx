@@ -204,7 +204,7 @@ function HomeScreen({ onAuthenticated }: { onAuthenticated: (user: User) => void
           <article><span>03</span><div className="workflow-icon quote-icon">$</div><h3>Send the proposal</h3><p>Your pricing becomes a clean, branded proposal with an annotated site map.</p></article>
         </div>
       </section>
-      <section className="stripers-cta" id="built-for-stripers"><div><p>NO CRM BLOAT. NO GUESSWORK.</p><h2>Built for the people<br />who stripe the lot.</h2></div><button onClick={() => setAuthMode("signup")}>BUILD YOUR PRICE BOOK <span>→</span></button></section>
+      <section className="stripers-cta" id="built-for-stripers"><div><p>NO CRM BLOAT. NO GUESSWORK.</p><h2>Made by stripers.<br />For stripers.</h2></div><button onClick={() => setAuthMode("signup")}>BUILD YOUR PRICE BOOK <span>→</span></button></section>
       <footer className="home-footer"><div className="wordmark"><BrandMark /><span>STRIPE PROS</span></div><p>Measurement-assisted quoting for parking lot striping contractors.</p><span>© 2026 STRIPE PROS</span></footer>
       {authMode && <AuthModal onAuthenticated={onAuthenticated} onClose={() => setAuthMode(null)} initialMode={authMode} />}
     </main>

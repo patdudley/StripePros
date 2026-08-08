@@ -132,8 +132,11 @@ function ProductDemo() {
     <section className="product-demo" aria-label="Interactive quote workflow demonstration">
       <div className="demo-browser-bar"><span><i /><i /><i /></span><b>NEW QUOTE // DEMO</b><small>ILLUSTRATIVE WORKFLOW</small></div>
       <div className="demo-workspace">
-        <div className="demo-address-panel">
-          <div className="demo-step-label"><b>01</b><span>FIND THE LOT</span></div>
+        <div className="demo-three-blocks">
+        <div className="demo-address-panel demo-stage-block">
+          <div className="demo-step-label"><b>01</b><span>TYPE IN THE ADDRESS</span></div>
+          <h3>Start with the property.</h3>
+          <p>Enter any commercial address and open current aerial imagery without leaving your desk.</p>
           <form className="demo-search" onSubmit={startScan}>
             <span aria-hidden="true">⌖</span>
             <input aria-label="Demo site address" value={address} onChange={(event) => { setAddress(event.target.value); setPhase("ready"); }} placeholder="Enter a property address" />
@@ -146,16 +149,18 @@ function ProductDemo() {
             <b />
             <span className={phase === "quote" ? "done" : ""}><i>3</i> Quote ready</span>
           </div>
+          <div className="demo-address-found"><span>PROPERTY MATCH</span><strong>Snapdragon Stadium</strong><small>San Diego, California</small></div>
         </div>
-        <div className="demo-output">
-          <div className={`lot-canvas ${phase}`}>
+          <div className={`lot-canvas demo-stage-block ${phase}`}>
             <div ref={demoMapElementRef} className="demo-real-map" aria-label="Aerial imagery of the Snapdragon Stadium west parking lot" />
+            <div className="demo-step-label demo-map-label"><b>02</b><span>SCAN THE PARKING LOT</span></div>
             <div className="lot-boundary"><i /><i /><i /><i /></div>
             {phase === "scanning" && <div className="scan-line"><span>MEASURING SITE</span></div>}
             {(phase === "scanning" || phase === "quote") && <div className="scan-hud"><span><i /> IMAGERY LOCKED</span><strong>{phase === "quote" ? "MEASUREMENT COMPLETE" : "SCANNING STRIPING LAYOUT"}</strong></div>}
             {phase === "quote" && <div className="map-summary"><div><b>84</b><span>STALLS</span></div><div><b>2</b><span>ADA</span></div><div><b>186</b><span>CURB LF</span></div></div>}
           </div>
-          <div className={`quote-preview ${phase === "quote" ? "revealed" : ""}`}>
+          <div className={`quote-preview demo-stage-block ${phase === "quote" ? "revealed" : ""}`}>
+            <div className="demo-step-label demo-quote-label"><b>03</b><span>GENERATE THE QUOTE</span></div>
             <div className="quote-top"><span><BrandMark /> STRIPE PROS</span><b>PROPOSAL #SP-1042</b></div>
             <div className="quote-site"><small>PREPARED FOR</small><strong>San Diego Stadium Operations</strong><span>2101 Stadium Way · San Diego, CA</span></div>
             <div className="quote-lines">

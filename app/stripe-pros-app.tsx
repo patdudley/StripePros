@@ -6,6 +6,7 @@ import { PRICE_UNITS, UNIT_LABELS, type PriceUnit } from "@/lib/price-book";
 
 type User = { id: string; email: string; companyName: string };
 type GeocodeResult = { label: string; lat: number; lng: number };
+type AddressSuggestion = GeocodeResult & { primary: string; secondary: string };
 type PriceItem = {
   id: string;
   name: string;
@@ -76,6 +77,10 @@ function ProductDemo() {
   const [selectedSite, setSelectedSite] = useState<GeocodeResult | null>(null);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
+  const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
+  const [suggesting, setSuggesting] = useState(false);
+  const [activeSuggestion, setActiveSuggestion] = useState(-1);
+  const suppressSuggestionsRef = useRef(false);
 
   useEffect(() => {
     if (!demoMapElementRef.current || demoMapRef.current) return;
@@ -106,12 +111,48 @@ function ProductDemo() {
     }
   }, [phase]);
 
+  useEffect(() => {
+    const query = address.trim();
+    if (suppressSuggestionsRef.current) {
+      suppressSuggestionsRef.current = false;
+      return;
+    }
+    if (query.length < 3 || phase !== "typing") return;
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setSuggesting(true);
+      try {
+        const result = await api<{ results: AddressSuggestion[] }>(`/api/geocode/suggest?q=${encodeURIComponent(query)}`, { signal: controller.signal });
+        setSuggestions(result.results);
+        setActiveSuggestion(-1);
+      } catch (caught) {
+        if (!(caught instanceof DOMException && caught.name === "AbortError")) setSuggestions([]);
+      } finally {
+        if (!controller.signal.aborted) setSuggesting(false);
+      }
+    }, 400);
+
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [address, phase]);
+
   function replay() {
     setAddress("");
     setPhase("typing");
     setSelectedSite(null);
     setSearchError("");
+    setSuggestions([]);
     demoMapRef.current?.flyTo([32.7849, -117.1258], 18, { duration: .8 });
+  }
+
+  function selectSuggestion(site: AddressSuggestion) {
+    suppressSuggestionsRef.current = true;
+    setAddress(site.label);
+    setSelectedSite(site);
+    setSuggestions([]);
+    setActiveSuggestion(-1);
+    setSearchError("");
+    demoMapRef.current?.flyTo([site.lat, site.lng], 18, { duration: 1.1 });
   }
 
   async function startScan(event: FormEvent<HTMLFormElement>) {
@@ -119,9 +160,10 @@ function ProductDemo() {
     if (!address.trim() || searching) return;
     setSearching(true);
     setSearchError("");
+    setSuggestions([]);
     try {
-      const result = await api<{ results: GeocodeResult[] }>(`/api/geocode?q=${encodeURIComponent(address)}`);
-      const site = result.results[0];
+      const result = selectedSite ? null : await api<{ results: GeocodeResult[] }>(`/api/geocode?q=${encodeURIComponent(address)}`);
+      const site = selectedSite ?? result?.results[0];
       if (!site) throw new Error("We could not find that address. Try including the city and state.");
       setSelectedSite(site);
       demoMapRef.current?.flyTo([site.lat, site.lng], 18, { duration: 1.25 });
@@ -159,8 +201,16 @@ function ProductDemo() {
           <p>Enter any commercial address and open current aerial imagery without leaving your desk.</p>
           <form className="demo-search" onSubmit={startScan}>
             <span aria-hidden="true">⌖</span>
-            <input aria-label="Demo site address" value={address} onChange={(event) => { setAddress(event.target.value); setPhase("typing"); setSelectedSite(null); setSearchError(""); }} placeholder="Try 737 Pearl St, La Jolla, CA" />
+            <input aria-label="Demo site address" role="combobox" aria-autocomplete="list" aria-expanded={Boolean(suggestions.length)} aria-controls="demo-address-suggestions" aria-activedescendant={activeSuggestion >= 0 ? `demo-suggestion-${activeSuggestion}` : undefined} value={address} onChange={(event) => { setAddress(event.target.value); setPhase("typing"); setSelectedSite(null); setSearchError(""); setSuggestions([]); }} onKeyDown={(event) => {
+              if (event.key === "ArrowDown" && suggestions.length) { event.preventDefault(); setActiveSuggestion((current) => Math.min(current + 1, suggestions.length - 1)); }
+              if (event.key === "ArrowUp" && suggestions.length) { event.preventDefault(); setActiveSuggestion((current) => Math.max(current - 1, 0)); }
+              if (event.key === "Enter" && activeSuggestion >= 0) { event.preventDefault(); selectSuggestion(suggestions[activeSuggestion]); }
+              if (event.key === "Escape") { setSuggestions([]); setActiveSuggestion(-1); }
+            }} placeholder="Try 737 Pearl St, La Jolla, CA" autoComplete="off" />
             <button disabled={!address.trim() || searching || phase === "scanning"}>{searching ? "FINDING ADDRESS…" : phase === "scanning" ? "ANALYZING…" : "ANALYZE LOT"}</button>
+            {(suggesting || suggestions.length > 0) && <div className="demo-suggestions" id="demo-address-suggestions" role="listbox">
+              {suggesting && !suggestions.length ? <span>SEARCHING ADDRESSES…</span> : suggestions.map((suggestion, index) => <button id={`demo-suggestion-${index}`} role="option" aria-selected={index === activeSuggestion} className={index === activeSuggestion ? "active" : ""} type="button" key={`${suggestion.lat}-${suggestion.lng}-${index}`} onMouseDown={(event) => event.preventDefault()} onClick={() => selectSuggestion(suggestion)}><i>⌖</i><span><strong>{suggestion.primary}</strong><small>{suggestion.secondary}</small></span></button>)}
+            </div>}
           </form>
           {searchError && <p className="demo-search-error" role="alert">{searchError}</p>}
           <div className="demo-progress" aria-live="polite">

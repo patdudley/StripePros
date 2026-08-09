@@ -250,7 +250,7 @@ function ProductDemo() {
     setDraftCounts((current) => ({ ...current, curb: Math.max(0, Math.round(perimeter)) }));
   }
 
-  function beginDemoLotSelection(site: GeocodeResult) {
+  function beginDemoLotSelection() {
     const map = demoMapRef.current as DemoGeomanMap | null;
     if (!map) return;
     if (demoBoundaryRef.current) map.removeLayer(demoBoundaryRef.current);
@@ -259,7 +259,6 @@ function ProductDemo() {
     setDraftCounts({ stalls: 0, ada: 0, arrows: 0, curb: 0 });
     setSelectingLot(true);
     setPhase("selecting");
-    map.flyTo([site.lat, site.lng], Math.min(19, demoScanZoomRef.current), { duration: 1 });
     map.dragging.enable();
     map.scrollWheelZoom.enable();
     map.touchZoom.enable();
@@ -298,7 +297,8 @@ function ProductDemo() {
     setSuggestions([]);
     setActiveSuggestion(-1);
     setSearchError("");
-    demoMapRef.current?.flyTo([site.lat, site.lng], 18, { duration: 1.1 });
+    demoMapRef.current?.stop();
+    demoMapRef.current?.setView([site.lat, site.lng], 18, { animate: false });
   }
 
   async function startScan(event: FormEvent<HTMLFormElement>) {
@@ -308,12 +308,17 @@ function ProductDemo() {
     setSearchError("");
     setSuggestions([]);
     try {
-      const result = selectedSite ? null : await api<{ results: GeocodeResult[] }>(`/api/geocode?q=${encodeURIComponent(address)}`);
+      const hadSelectedSite = Boolean(selectedSite);
+      const result = hadSelectedSite ? null : await api<{ results: GeocodeResult[] }>(`/api/geocode?q=${encodeURIComponent(address)}`);
       const site = selectedSite ?? result?.results[0];
       if (!site) throw new Error("We could not find that address. Try including the city and state.");
       setSelectedSite(site);
-      await configureDemoImagery(site);
-      beginDemoLotSelection(site);
+      if (!hadSelectedSite) {
+        demoMapRef.current?.stop();
+        demoMapRef.current?.setView([site.lat, site.lng], 18, { animate: false });
+        await configureDemoImagery(site);
+      }
+      beginDemoLotSelection();
     } catch (caught) {
       setPhase("typing");
       setSearchError(caught instanceof Error ? caught.message : "Could not find that property.");

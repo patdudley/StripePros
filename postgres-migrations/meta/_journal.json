@@ -8,6 +8,13 @@
       "when": 1786130314104,
       "tag": "0000_lumpy_wallow",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1786295839269,
+      "tag": "0001_calm_katie_power",
+      "breakpoints": true
     }
   ]
 }

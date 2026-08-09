@@ -25,6 +25,11 @@ export const priceUnit = pgEnum("price_unit", [
 ]);
 export const geometryType = pgEnum("geometry_type", ["polygon", "polyline", "point"]);
 export const measurementType = pgEnum("measurement_type", ["area_sqft", "length_ft", "count"]);
+export const annotationProvenance = pgEnum("annotation_provenance", ["manual", "model", "fixture"]);
+export const annotationReviewStatus = pgEnum("annotation_review_status", ["unreviewed", "accepted", "edited", "rejected"]);
+export const takeoffAnnotationType = pgEnum("takeoff_annotation_type", ["standard_stall", "ada_stall", "ada_access_aisle", "directional_arrow", "crosswalk", "stop_bar", "wheel_stop", "painted_text", "painted_curb"]);
+export const exclusionType = pgEnum("exclusion_type", ["building", "landscaping", "road", "island", "neighboring_property"]);
+export const stripingService = pgEnum("striping_service", ["restripe", "new_layout"]);
 
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -120,3 +125,44 @@ export const adaAssessments = pgTable("ada_assessments", {
   accessibleDeficit: integer("accessible_deficit").notNull(),
   vanDeficit: integer("van_deficit").notNull(),
 }, (table) => [uniqueIndex("ada_assessments_quote_unique").on(table.quoteId)]);
+
+export const takeoffJobs = pgTable("takeoff_jobs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  siteId: uuid("site_id").notNull().references(() => sites.id, { onDelete: "cascade" }),
+  quoteId: uuid("quote_id").notNull().references(() => quotes.id, { onDelete: "cascade" }),
+  countsVerified: boolean("counts_verified").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [index("takeoff_jobs_user_updated_idx").on(table.userId, table.updatedAt)]);
+
+export const lotBoundaries = pgTable("lot_boundaries", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  jobId: uuid("job_id").notNull().references(() => takeoffJobs.id, { onDelete: "cascade" }),
+  geojson: jsonb("geojson").notNull(),
+  grossAreaSqFt: numeric("gross_area_sq_ft", { precision: 16, scale: 2 }).notNull(),
+  pavementAreaSqFt: numeric("pavement_area_sq_ft", { precision: 16, scale: 2 }).notNull(),
+}, (table) => [uniqueIndex("lot_boundaries_job_unique").on(table.jobId)]);
+
+export const lotExclusions = pgTable("lot_exclusions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  jobId: uuid("job_id").notNull().references(() => takeoffJobs.id, { onDelete: "cascade" }),
+  type: exclusionType("type").notNull(),
+  geojson: jsonb("geojson").notNull(),
+  areaSqFt: numeric("area_sq_ft", { precision: 16, scale: 2 }).notNull(),
+}, (table) => [index("lot_exclusions_job_idx").on(table.jobId)]);
+
+export const takeoffAnnotations = pgTable("takeoff_annotations", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  jobId: uuid("job_id").notNull().references(() => takeoffJobs.id, { onDelete: "cascade" }),
+  type: takeoffAnnotationType("type").notNull(),
+  label: text("label").notNull(),
+  geomType: geometryType("geom_type").notNull(),
+  geojson: jsonb("geojson").notNull(),
+  provenance: annotationProvenance("provenance").notNull(),
+  reviewStatus: annotationReviewStatus("review_status").notNull(),
+  service: stripingService("service").notNull(),
+  stencilText: text("stencil_text"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [index("takeoff_annotations_job_review_idx").on(table.jobId, table.reviewStatus)]);

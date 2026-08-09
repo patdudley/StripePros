@@ -1,7 +1,9 @@
 import { defineConfig } from "drizzle-kit";
 
 export default defineConfig({
-  out: "./drizzle",
+  // Keep Postgres migrations separate from the `drizzle/` directory that Sites
+  // reserves for its bound SQLite/D1 database migrations.
+  out: "./postgres-migrations",
   schema: "./db/schema.ts",
   dialect: "postgresql",
   dbCredentials: {

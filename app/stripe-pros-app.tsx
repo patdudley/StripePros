@@ -47,9 +47,9 @@ function BrandMark() {
   return <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>;
 }
 
-function AuthModal({ onAuthenticated, onClose, initialMode }: { onAuthenticated: (user: User) => void; onClose: () => void; initialMode: "signup" | "signin" }) {
+function AuthModal({ onAuthenticated, onClose, initialMode, initialError = "" }: { onAuthenticated: (user: User) => void; onClose: () => void; initialMode: "signup" | "signin"; initialError?: string }) {
   const [mode, setMode] = useState<"signup" | "signin">(initialMode);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(initialError);
   const [loading, setLoading] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -76,6 +76,8 @@ function AuthModal({ onAuthenticated, onClose, initialMode }: { onAuthenticated:
         <button className="modal-close" onClick={onClose} aria-label="Close account form">×</button>
         <form className="auth-card" onSubmit={submit}>
           <div className="card-heading"><BrandMark /><div><p>{mode === "signup" ? "START YOUR PRICE BOOK" : "WELCOME BACK"}</p><h2 id="auth-title">{mode === "signup" ? "Build faster quotes." : "Get back to work."}</h2></div></div>
+          <a className="google-auth-button" href="/api/auth/google/start"><b>G</b><span>CONTINUE WITH GOOGLE</span></a>
+          <div className="auth-divider"><span>OR USE EMAIL</span></div>
           {mode === "signup" && <label>COMPANY NAME<input name="companyName" placeholder="Dudley Striping Co." minLength={2} required autoComplete="organization" /></label>}
           <label>EMAIL ADDRESS<input name="email" type="email" placeholder="you@company.com" required autoComplete="email" /></label>
           <label>PASSWORD<input name="password" type="password" placeholder="10+ characters" minLength={10} required autoComplete={mode === "signup" ? "new-password" : "current-password"} /></label>
@@ -414,6 +416,15 @@ function ProductDemo() {
 
 function HomeScreen({ onAuthenticated }: { onAuthenticated: (user: User) => void }) {
   const [authMode, setAuthMode] = useState<"signup" | "signin" | null>(null);
+  const [authError, setAuthError] = useState("");
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const error = new URLSearchParams(window.location.search).get("auth_error");
+      if (error) { setAuthError(error); setAuthMode("signin"); }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   return (
     <main className="home-shell">
@@ -447,7 +458,7 @@ function HomeScreen({ onAuthenticated }: { onAuthenticated: (user: User) => void
         <p className="pricing-note">No card required for your first five quotes. Cancel a paid plan anytime.</p>
       </section>
       <footer className="home-footer"><div className="wordmark"><BrandMark /><span>STRIPE PROS</span></div><p>Measurement-assisted quoting for parking lot striping contractors.</p><span>© 2026 STRIPE PROS</span></footer>
-      {authMode && <AuthModal onAuthenticated={onAuthenticated} onClose={() => setAuthMode(null)} initialMode={authMode} />}
+      {authMode && <AuthModal onAuthenticated={onAuthenticated} onClose={() => { setAuthMode(null); setAuthError(""); }} initialMode={authMode} initialError={authError} />}
     </main>
   );
 }

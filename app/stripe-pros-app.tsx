@@ -5,6 +5,7 @@ import type { Map as LeafletMap } from "leaflet";
 import { PRICE_UNITS, UNIT_LABELS, type PriceUnit } from "@/lib/price-book";
 
 type User = { id: string; email: string; companyName: string };
+type GeocodeResult = { label: string; lat: number; lng: number };
 type PriceItem = {
   id: string;
   name: string;
@@ -67,13 +68,14 @@ function AuthModal({ onAuthenticated, onClose, initialMode }: { onAuthenticated:
   );
 }
 
-const DEMO_ADDRESS = "2101 Stadium Way, San Diego, CA 92108";
-
 function ProductDemo() {
   const demoMapElementRef = useRef<HTMLDivElement>(null);
   const demoMapRef = useRef<LeafletMap | null>(null);
-  const [phase, setPhase] = useState<"typing" | "ready" | "scanning" | "quote">("typing");
+  const [phase, setPhase] = useState<"typing" | "scanning" | "quote">("typing");
   const [address, setAddress] = useState("");
+  const [selectedSite, setSelectedSite] = useState<GeocodeResult | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState("");
 
   useEffect(() => {
     if (!demoMapElementRef.current || demoMapRef.current) return;
@@ -98,20 +100,6 @@ function ProductDemo() {
   }, []);
 
   useEffect(() => {
-    if (phase !== "typing") return;
-    if (address.length === DEMO_ADDRESS.length) {
-      const readyTimer = window.setTimeout(() => setPhase("ready"), 300);
-      return () => window.clearTimeout(readyTimer);
-    }
-    const typingTimer = window.setTimeout(() => setAddress(DEMO_ADDRESS.slice(0, address.length + 1)), address.length === 0 ? 650 : 33);
-    return () => window.clearTimeout(typingTimer);
-  }, [address, phase]);
-
-  useEffect(() => {
-    if (phase === "ready") {
-      const scanTimer = window.setTimeout(() => setPhase("scanning"), 650);
-      return () => window.clearTimeout(scanTimer);
-    }
     if (phase === "scanning") {
       const quoteTimer = window.setTimeout(() => setPhase("quote"), 2500);
       return () => window.clearTimeout(quoteTimer);
@@ -121,12 +109,44 @@ function ProductDemo() {
   function replay() {
     setAddress("");
     setPhase("typing");
+    setSelectedSite(null);
+    setSearchError("");
+    demoMapRef.current?.flyTo([32.7849, -117.1258], 18, { duration: .8 });
   }
 
-  function startScan(event: FormEvent<HTMLFormElement>) {
+  async function startScan(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (address.trim()) setPhase("scanning");
+    if (!address.trim() || searching) return;
+    setSearching(true);
+    setSearchError("");
+    try {
+      const result = await api<{ results: GeocodeResult[] }>(`/api/geocode?q=${encodeURIComponent(address)}`);
+      const site = result.results[0];
+      if (!site) throw new Error("We could not find that address. Try including the city and state.");
+      setSelectedSite(site);
+      demoMapRef.current?.flyTo([site.lat, site.lng], 18, { duration: 1.25 });
+      setPhase("scanning");
+    } catch (caught) {
+      setPhase("typing");
+      setSearchError(caught instanceof Error ? caught.message : "Could not find that property.");
+    } finally {
+      setSearching(false);
+    }
   }
+
+  const mockQuote = useMemo(() => {
+    const seed = selectedSite ? Math.abs(Math.round(selectedSite.lat * 1000) + Math.round(selectedSite.lng * 1000)) : 0;
+    const stalls = 44 + seed % 57;
+    const ada = Math.max(1, Math.ceil(stalls / 50));
+    const curb = 120 + seed % 181;
+    const total = stalls * 5 + ada * 35 + curb * 1.75 + 250;
+    return { stalls, ada, curb, total };
+  }, [selectedSite]);
+
+  const propertyParts = selectedSite?.label.split(",").map((part) => part.trim()) ?? [];
+  const startsWithStreetNumber = /^\d/.test(propertyParts[0] ?? "");
+  const propertyName = startsWithStreetNumber ? `Property at ${propertyParts.slice(0, 2).join(" ")}` : propertyParts[0] || "Your customer property";
+  const propertyLocation = propertyParts.slice(startsWithStreetNumber ? 2 : 1, startsWithStreetNumber ? 5 : 4).join(", ") || "Address ready to scan";
 
   return (
     <section className="product-demo" aria-label="Interactive quote workflow demonstration">
@@ -139,37 +159,38 @@ function ProductDemo() {
           <p>Enter any commercial address and open current aerial imagery without leaving your desk.</p>
           <form className="demo-search" onSubmit={startScan}>
             <span aria-hidden="true">⌖</span>
-            <input aria-label="Demo site address" value={address} onChange={(event) => { setAddress(event.target.value); setPhase("ready"); }} placeholder="Enter a property address" />
-            <button disabled={!address.trim() || phase === "scanning"}>{phase === "scanning" ? "ANALYZING…" : "ANALYZE LOT"}</button>
+            <input aria-label="Demo site address" value={address} onChange={(event) => { setAddress(event.target.value); setPhase("typing"); setSelectedSite(null); setSearchError(""); }} placeholder="Try 737 Pearl St, La Jolla, CA" />
+            <button disabled={!address.trim() || searching || phase === "scanning"}>{searching ? "FINDING ADDRESS…" : phase === "scanning" ? "ANALYZING…" : "ANALYZE LOT"}</button>
           </form>
+          {searchError && <p className="demo-search-error" role="alert">{searchError}</p>}
           <div className="demo-progress" aria-live="polite">
-            <span className={phase !== "typing" ? "done" : "active"}><i>1</i> Address found</span>
+            <span className={selectedSite ? "done" : "active"}><i>1</i> Address found</span>
             <b />
             <span className={phase === "scanning" ? "active" : phase === "quote" ? "done" : ""}><i>2</i> Lot measured</span>
             <b />
             <span className={phase === "quote" ? "done" : ""}><i>3</i> Quote ready</span>
           </div>
-          <div className="demo-address-found"><span>PROPERTY MATCH</span><strong>Snapdragon Stadium</strong><small>San Diego, California</small></div>
+          <div className={`demo-address-found ${selectedSite ? "matched" : ""}`}><span>{selectedSite ? "PROPERTY MATCH" : "LIVE ADDRESS DEMO"}</span><strong>{propertyName}</strong><small>{propertyLocation}</small></div>
         </div>
           <div className={`lot-canvas demo-stage-block ${phase}`}>
-            <div ref={demoMapElementRef} className="demo-real-map" aria-label="Aerial imagery of the Snapdragon Stadium west parking lot" />
+            <div ref={demoMapElementRef} className="demo-real-map" aria-label={`Aerial imagery of ${propertyName}`} />
             <div className="demo-step-label demo-map-label"><b>02</b><span>SCAN THE PARKING LOT</span></div>
             <div className="lot-boundary"><i /><i /><i /><i /></div>
             {phase === "scanning" && <div className="scan-line"><span>MEASURING SITE</span></div>}
             {(phase === "scanning" || phase === "quote") && <div className="scan-hud"><span><i /> IMAGERY LOCKED</span><strong>{phase === "quote" ? "MEASUREMENT COMPLETE" : "SCANNING STRIPING LAYOUT"}</strong></div>}
-            {phase === "quote" && <div className="map-summary"><div><b>84</b><span>STALLS</span></div><div><b>2</b><span>ADA</span></div><div><b>186</b><span>CURB LF</span></div></div>}
+            {phase === "quote" && <div className="map-summary"><div><b>{mockQuote.stalls}</b><span>STALLS</span></div><div><b>{mockQuote.ada}</b><span>ADA</span></div><div><b>{mockQuote.curb}</b><span>CURB LF</span></div></div>}
           </div>
           <div className={`quote-preview demo-stage-block ${phase === "quote" ? "revealed" : ""}`}>
             <div className="demo-step-label demo-quote-label"><b>03</b><span>GENERATE THE QUOTE</span></div>
-            <div className="quote-top"><span><BrandMark /> STRIPE PROS</span><b>PROPOSAL #SP-1042</b></div>
-            <div className="quote-site"><small>PREPARED FOR</small><strong>San Diego Stadium Operations</strong><span>2101 Stadium Way · San Diego, CA</span></div>
+            <div className="quote-top"><span><BrandMark /> STRIPE PROS</span><b>MOCK PROPOSAL</b></div>
+            <div className="quote-site"><small>PREPARED FOR</small><strong>{propertyName}</strong><span>{propertyLocation}</span></div>
             <div className="quote-lines">
-              <div><span>Standard stalls — restripe <small>84 × $5.00</small></span><b>$420.00</b></div>
-              <div><span>ADA stalls + symbols <small>2 × $35.00</small></span><b>$70.00</b></div>
-              <div><span>Curb paint <small>186 LF × $1.75</small></span><b>$325.50</b></div>
+              <div><span>Standard stalls — restripe <small>{mockQuote.stalls} × $5.00</small></span><b>${(mockQuote.stalls * 5).toFixed(2)}</b></div>
+              <div><span>ADA stalls + symbols <small>{mockQuote.ada} × $35.00</small></span><b>${(mockQuote.ada * 35).toFixed(2)}</b></div>
+              <div><span>Curb paint <small>{mockQuote.curb} LF × $1.75</small></span><b>${(mockQuote.curb * 1.75).toFixed(2)}</b></div>
               <div><span>Mobilization <small>1 × $250.00</small></span><b>$250.00</b></div>
             </div>
-            <div className="quote-total"><span>TOTAL PROPOSAL</span><strong>$1,065.50</strong></div>
+            <div className="quote-total"><span>MOCK TOTAL</span><strong>${mockQuote.total.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
             <div className="quote-ready"><span>✓</span><div><b>BRANDED PDF READY</b><small>Measurements, site map & pricing included</small></div></div>
           </div>
         </div>

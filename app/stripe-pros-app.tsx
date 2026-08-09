@@ -106,7 +106,7 @@ function ProductDemo() {
   const [boundaryEditing, setBoundaryEditing] = useState(false);
   const [selectingLot, setSelectingLot] = useState(false);
   const [lotArea, setLotArea] = useState(0);
-  const [draftCounts, setDraftCounts] = useState({ stalls: 0, ada: 0, arrows: 0, curb: 0 });
+  const [draftCounts, setDraftCounts] = useState({ stalls: 0, ada: 0, arrows: 0 });
   const suppressSuggestionsRef = useRef(false);
 
   useEffect(() => {
@@ -229,7 +229,7 @@ function ProductDemo() {
     setBoundaryEditing(false);
     setSelectingLot(false);
     setLotArea(0);
-    setDraftCounts({ stalls: 0, ada: 0, arrows: 0, curb: 0 });
+    setDraftCounts({ stalls: 0, ada: 0, arrows: 0 });
     if (demoBoundaryRef.current) demoMapRef.current?.removeLayer(demoBoundaryRef.current);
     demoBoundaryRef.current = null;
     (demoMapRef.current as DemoGeomanMap | null)?.pm.disableDraw();
@@ -240,14 +240,10 @@ function ProductDemo() {
   }
 
   function updateDemoBoundary(boundary: DemoBoundary) {
-    const map = demoMapRef.current;
-    if (!map) return;
+    if (!demoMapRef.current) return;
     const area = turfArea(boundary.toGeoJSON()) * 10.7639;
-    const bounds = boundary.getBounds();
-    const perimeter = 2 * (map.distance(bounds.getNorthWest(), bounds.getNorthEast()) + map.distance(bounds.getNorthWest(), bounds.getSouthWest())) * 3.28084;
     setLotArea(area);
     boundary.setTooltipContent(`${Math.round(area).toLocaleString("en-US")} SQ FT · DRAFT OUTLINE`);
-    setDraftCounts((current) => ({ ...current, curb: Math.max(0, Math.round(perimeter)) }));
   }
 
   function beginDemoLotSelection() {
@@ -256,7 +252,7 @@ function ProductDemo() {
     if (demoBoundaryRef.current) map.removeLayer(demoBoundaryRef.current);
     demoBoundaryRef.current = null;
     setLotArea(0);
-    setDraftCounts({ stalls: 0, ada: 0, arrows: 0, curb: 0 });
+    setDraftCounts({ stalls: 0, ada: 0, arrows: 0 });
     setSelectingLot(true);
     setPhase("selecting");
     map.dragging.enable();
@@ -328,7 +324,7 @@ function ProductDemo() {
   }
 
   const mockQuote = useMemo(() => {
-    const total = draftCounts.stalls * 5 + draftCounts.ada * 35 + draftCounts.arrows * 15 + draftCounts.curb * 1.75 + 250;
+    const total = draftCounts.stalls * 5 + draftCounts.ada * 35 + draftCounts.arrows * 15;
     return { ...draftCounts, lotArea, total };
   }, [draftCounts, lotArea]);
 
@@ -385,11 +381,9 @@ function ProductDemo() {
               <div><span>Standard stalls — restripe <small>{mockQuote.stalls} × $5.00</small></span><b>${(mockQuote.stalls * 5).toFixed(2)}</b></div>
               <div><span>ADA stalls + symbols <small>{mockQuote.ada} × $35.00</small></span><b>${(mockQuote.ada * 35).toFixed(2)}</b></div>
               <div><span>Directional arrows <small>{mockQuote.arrows} × $15.00</small></span><b>${(mockQuote.arrows * 15).toFixed(2)}</b></div>
-              <div><span>Curb paint <small>{mockQuote.curb} LF × $1.75</small></span><b>${(mockQuote.curb * 1.75).toFixed(2)}</b></div>
-              <div><span>Mobilization <small>1 × $250.00</small></span><b>$250.00</b></div>
             </div>
             <div className="quote-total"><span>DRAFT TOTAL</span><strong>${mockQuote.total.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
-            <div className="quote-ready"><span>!</span><div><b>VERIFY BEFORE SENDING</b><small>Edit the lot outline and every detected count</small></div></div>
+            <div className="quote-ready"><span>!</span><div><b>VERIFY BEFORE SENDING</b><small>Edit the lot outline and enter each visible marking count</small></div></div>
           </div>
         </div>
       </div>

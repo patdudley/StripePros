@@ -25,7 +25,8 @@ const seed = (
   unit: PriceUnit,
   unitPrice: number,
   sortOrder: number,
-): SeedPriceBookItem => ({ category, name, unit, unitPrice: unitPrice.toFixed(2), isActive: true, sortOrder });
+  isActive = true,
+): SeedPriceBookItem => ({ category, name, unit, unitPrice: unitPrice.toFixed(2), isActive, sortOrder });
 
 export const DEFAULT_PRICE_BOOK: SeedPriceBookItem[] = [
   seed("Striping", "Standard stall — single line, restripe", "per_stall", 5, 10),
@@ -38,7 +39,7 @@ export const DEFAULT_PRICE_BOOK: SeedPriceBookItem[] = [
   seed("Striping", "Stop bar", "per_lf", 3, 80),
   seed("Striping", "Crosswalk bar", "per_lf", 3, 90),
   seed("Striping", "Letters / numbers", "per_char", 8, 100),
-  seed("Striping", "Curb paint", "per_lf", 1.75, 110),
+  seed("Striping", "Curb paint", "per_lf", 1.75, 110, false),
   seed("Striping", "Fire lane striping", "per_lf", 2, 120),
   seed("Striping", "Wheel stop — reset existing", "each", 15, 130),
   seed("Striping", "Wheel stop — supply and install", "each", 45, 140),
@@ -47,6 +48,6 @@ export const DEFAULT_PRICE_BOOK: SeedPriceBookItem[] = [
   seed("Surface", "Sealcoat — two coat", "per_sqft", 0.24, 170),
   seed("Surface", "Crack fill", "per_lf", 1.1, 180),
   seed("Surface", "Asphalt patch", "per_sqft", 4.5, 190),
-  seed("Job", "Mobilization", "flat", 250, 200),
+  seed("Job", "Mobilization / trip and setup", "flat", 250, 200, false),
   seed("Job", "Minimum job charge", "flat", 450, 210),
 ];

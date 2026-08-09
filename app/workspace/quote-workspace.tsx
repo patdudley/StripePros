@@ -142,7 +142,7 @@ export function QuoteWorkspace() {
   const [exporting, setExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState("");
   const [saved, setSaved] = useState<SavedEstimate[]>([]);
-  const [prices, setPrices] = useState({ stalls: 5, ada: 35, crosswalks: 75, arrows: 15, stopBars: 3, curb: 1.75, sealcoat: 0.16, mobilization: 250 });
+  const [prices, setPrices] = useState({ stalls: 5, ada: 35, crosswalks: 75, arrows: 15, stopBars: 3, curb: 1.75, sealcoat: 0.16 });
 
   useEffect(() => {
     const stored = window.localStorage.getItem("stripepros_demo_estimates");
@@ -303,8 +303,7 @@ export function QuoteWorkspace() {
     { id: "stopBars", name: "Stop bars", category: "Striping", unit: "LF", quantity: stopBars * 12, unitPrice: prices.stopBars },
     { id: "curb", name: "Curb paint", category: "Striping", unit: "LF", quantity: mapCounts.curb, unitPrice: prices.curb },
     { id: "sealcoat", name: "Sealcoat — single coat", category: "Surface", unit: "sqft", quantity: mapCounts.sealcoat, unitPrice: prices.sealcoat },
-    { id: "mobilization", name: "Mobilization", category: "Job", unit: "flat", quantity: hasVerifiedScope ? 1 : 0, unitPrice: prices.mobilization },
-  ].filter((item) => item.quantity > 0), [adaStalls, arrows, crosswalks, hasVerifiedScope, mapCounts, prices, standardStalls, stopBars]);
+  ].filter((item) => item.quantity > 0), [adaStalls, arrows, crosswalks, mapCounts, prices, standardStalls, stopBars]);
 
   const materialMultiplier = material === "thermoplastic" ? 2.8 : 1;
   const calculation = useMemo(() => calculateQuote(quoteItems, materialMultiplier, 450), [materialMultiplier, quoteItems]);

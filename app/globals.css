@@ -375,9 +375,6 @@ button { cursor: pointer; }
 .map-draw-tools button:first-child { border-radius: 4px 0 0 4px; }
 .map-draw-tools button:last-child { border: 0; border-radius: 0 4px 4px 0; }
 .map-draw-tools button.active { background: var(--amber); }
-.map-style-switch { position: absolute; z-index: 800; top: 13px; left: 229px; display: flex; padding: 3px; border: 1px solid rgba(255,255,255,.25); border-radius: 5px; background: rgba(17,17,15,.88); box-shadow: 0 4px 15px rgba(0,0,0,.2); }
-.map-style-switch button { height: 28px; border: 0; border-radius: 3px; background: transparent; color: #d2cfc7; padding: 0 10px; font: 900 7px Arial; letter-spacing: .08em; }
-.map-style-switch button.active { background: #fff; color: var(--ink); }
 .scan-lot-cta { position: absolute; z-index: 900; top: 64px; left: 50%; width: min(650px, calc(100% - 36px)); min-height: 66px; transform: translateX(-50%); display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: stretch; border: 1px solid var(--ink); background: rgba(255,255,255,.97); box-shadow: 0 14px 34px rgba(0,0,0,.28); backdrop-filter: blur(7px); }
 .scan-lot-cta > span { display: grid; place-items: center; padding: 0 13px; background: var(--amber); color: var(--ink); font: 900 7px monospace; letter-spacing: .1em; writing-mode: vertical-rl; transform: rotate(180deg); }
 .scan-lot-cta > div { min-width: 0; display: grid; align-content: center; gap: 4px; padding: 10px 15px; }
@@ -533,7 +530,6 @@ button { cursor: pointer; }
 .map-workflow-strip button { height: 38px; border: 0; border-right: 1px solid #d3cfc5; background: rgba(255,255,255,.96); color: var(--ink); padding: 0 10px; font: 900 7px Arial; letter-spacing: .07em; }
 .map-workflow-strip button.primary { background: var(--amber); }
 .map-workflow-strip button:disabled { color: #aaa69d; cursor: not-allowed; }
-.credible-takeoff .map-style-switch { top: 60px; left: 13px; }
 .map-history-tools { position: absolute; z-index: 850; top: 60px; right: 13px; display: flex; }
 .map-history-tools button { height: 30px; border: 1px solid rgba(255,255,255,.28); background: rgba(17,17,15,.9); color: #fff; padding: 0 9px; font: 800 7px Arial; }
 .map-history-tools button:disabled { opacity: .4; }
@@ -777,7 +773,6 @@ button { cursor: pointer; }
   .imagery-chip { display: none; }
   .workspace-address-search { min-height: 42px; flex: none; width: 100%; }
   .map-instructions { display: none; }
-  .map-style-switch { top: 59px; left: 13px; }
   .scan-lot-cta { top: 108px; width: calc(100% - 26px); grid-template-columns: 1fr auto; }
   .scan-lot-cta > span { display: none; }
   .scan-lot-cta > div { padding: 10px 12px; }

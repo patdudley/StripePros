@@ -144,7 +144,6 @@ export function CredibleTakeoffWorkspace() {
   const [countsVerified, setCountsVerified] = useState(false);
   const [prices, setPrices] = useState<Record<string, number>>({ ...DEFAULT_TAKEOFF_PRICES });
   const [material, setMaterial] = useState<"paint" | "thermoplastic">("paint");
-  const [mapStyle, setMapStyle] = useState<"aerial" | "street">("aerial");
   const [imageryInfo, setImageryInfo] = useState({ provider: "esri", detail: "Standard imagery", currentZoom: 18, maxZoom: 19, nativeMaxZoom: 19 as number | null, fallback: false });
   const [message, setMessage] = useState("Search an address, draw the lot, then create a manual takeoff.");
   const [saved, setSaved] = useState<SavedEstimate[]>([]);
@@ -400,7 +399,7 @@ export function CredibleTakeoffWorkspace() {
     setAddress(site.label); setSiteAddress(site.label); setSelectedSite(site); setResults([]);
     setMessage("Address found. Draw the actual parking-lot boundary. Counts start at zero.");
     mapRef.current?.flyTo([site.lat, site.lng], 19, { duration: 1 });
-    if (mapStyle === "aerial") void loadAerialImagery(site);
+    void loadAerialImagery(site);
   }
 
   function startDraw(intent: DrawIntent) {
@@ -432,17 +431,6 @@ export function CredibleTakeoffWorkspace() {
     replaceAnnotations([...annotationsRef.current, ...committed]);
     setRowBaseline(null);
     setMessage(`${committed.length} individually editable stalls added.`);
-  }
-
-  async function switchMapStyle(style: "aerial" | "street") {
-    const map = mapRef.current;
-    const L = leafletRef.current;
-    if (!map || !L || style === mapStyle) return;
-    if (baseLayerRef.current) map.removeLayer(baseLayerRef.current);
-    if (labelLayerRef.current && map.hasLayer(labelLayerRef.current)) map.removeLayer(labelLayerRef.current);
-    if (style === "street") baseLayerRef.current = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", { maxZoom: 20, attribution: "Map © Esri and contributors" }).addTo(map);
-    else await loadAerialImagery(selectedSite ?? undefined);
-    setMapStyle(style);
   }
 
   const quoteLines = useMemo(() => aggregateAnnotationQuote(annotations, prices, includeMobilization), [annotations, includeMobilization, prices]);
@@ -539,7 +527,6 @@ export function CredibleTakeoffWorkspace() {
         <div className="map-workflow-strip"><button className={!boundary ? "primary" : ""} onClick={() => startDraw("boundary")}>{boundary ? "REDRAW LOT" : "1 · DRAW LOT"}</button><button disabled={!boundary} onClick={() => startDraw("exclusion")}>＋ EXCLUSION</button><button disabled={!boundary} onClick={() => setBoundaryEditing((value) => !value)}>{boundaryEditing ? "SAVE BOUNDARY" : "EDIT BOUNDARY"}</button></div>
         {Boolean(exclusions.length) && <div className="exclusion-list"><strong>EXCLUSIONS</strong>{exclusions.map((exclusion) => <div key={exclusion.id}><button className={selectedExclusionId === exclusion.id ? "selected" : ""} onClick={() => setSelectedExclusionId(exclusion.id)}>{exclusion.type.replaceAll("_", " ")}</button><button aria-label={`Delete ${exclusion.type} exclusion`} onClick={() => { setExclusions((current) => current.filter((item) => item.id !== exclusion.id)); if (selectedExclusionId === exclusion.id) setSelectedExclusionId(null); }}>×</button></div>)}</div>}
         <div className="map-history-tools"><button onClick={undo} disabled={!undoRef.current.length}>↶ UNDO</button><button onClick={redo} disabled={!redoRef.current.length}>↷ REDO</button></div>
-        <div className="map-style-switch"><button className={mapStyle === "aerial" ? "active" : ""} onClick={() => void switchMapStyle("aerial")}>SATELLITE</button><button className={mapStyle === "street" ? "active" : ""} onClick={() => void switchMapStyle("street")}>STREET</button></div>
         <details className="imagery-diagnostic"><summary>DEV IMAGERY</summary><span>PROVIDER {imageryInfo.provider}</span><span>CURRENT Z{imageryInfo.currentZoom}</span><span>DISPLAY MAX Z{imageryInfo.maxZoom}</span><span>NATIVE {imageryInfo.nativeMaxZoom === null ? "UNKNOWN" : `Z${imageryInfo.nativeMaxZoom}`}</span><span>{imageryInfo.fallback ? "FALLBACK ACTIVE" : "PRIMARY ACTIVE"}</span></details>
         {drawingIntent && <div className="drawing-status">DRAWING {String(drawingIntent).replaceAll("_", " ").toUpperCase()} · CLICK MAP TO COMPLETE</div>}
         <div className="takeoff-message"><strong>{message}</strong></div>

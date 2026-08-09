@@ -10,13 +10,14 @@ type User = { id: string; email: string; companyName: string };
 type GeocodeResult = { label: string; lat: number; lng: number };
 type AddressSuggestion = GeocodeResult & { primary: string; secondary: string };
 type MapImageryConfig = {
-  provider: "esri" | "mapbox" | "nearmap";
+  provider: "esri" | "google" | "mapbox" | "nearmap";
   tileUrl: string;
   maxZoom: number;
   nativeMaxZoom?: number | null;
   coverageStatus: "available" | "unchecked" | "unconfigured" | "unavailable" | "error";
   captureDate: string | null;
   resolutionCm: number | null;
+  attribution?: string;
 };
 type DemoBoundary = LeafletPolygon & {
   pm: { enable(options?: Record<string, unknown>): void; disable(): void };
@@ -176,7 +177,7 @@ function ProductDemo() {
           maxZoom: config.maxZoom,
           ...(config.nativeMaxZoom === null ? {} : { maxNativeZoom: config.nativeMaxZoom ?? config.maxZoom }),
           crossOrigin: "anonymous",
-          attribution: config.provider === "nearmap" ? "Aerial imagery © Nearmap" : config.provider === "mapbox" ? "Imagery © Mapbox" : "Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+          attribution: config.attribution ?? (config.provider === "nearmap" ? "Aerial imagery © Nearmap" : config.provider === "mapbox" ? "Imagery © Mapbox" : "Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community"),
         }) as TileLayer;
         const loaded = await activateTileLayer(map, nextLayer, demoTileLayerRef.current);
         if (!loaded) {
@@ -188,7 +189,9 @@ function ProductDemo() {
         demoImagerySignatureRef.current = signature;
       }
       demoScanZoomRef.current = config.maxZoom;
-      if (config.provider === "mapbox") {
+      if (config.provider === "google") {
+        setImageryDetail(`GOOGLE SATELLITE · DISPLAY Z${config.maxZoom} · NATIVE ${config.nativeMaxZoom ?? "UNREPORTED"}`);
+      } else if (config.provider === "mapbox") {
         setImageryDetail(`MAPBOX SATELLITE · DISPLAY Z${config.maxZoom} · NATIVE ${config.nativeMaxZoom ?? "UNREPORTED"}`);
       } else if (config.provider === "nearmap") {
         const captured = config.captureDate ? ` · ${new Date(`${config.captureDate}T12:00:00`).toLocaleDateString("en-US", { month: "short", year: "numeric" }).toUpperCase()}` : "";

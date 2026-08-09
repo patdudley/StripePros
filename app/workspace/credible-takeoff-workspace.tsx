@@ -14,13 +14,14 @@ import type { AnnotationReviewStatus, AnnotationType, ExclusionType, LotExclusio
 
 type GeocodeResult = { label: string; lat: number; lng: number };
 type MapImageryConfig = {
-  provider: "esri" | "mapbox" | "nearmap";
+  provider: "esri" | "google" | "mapbox" | "nearmap";
   tileUrl: string;
   maxZoom: number;
   nativeMaxZoom?: number | null;
   coverageStatus: "available" | "unchecked" | "unconfigured" | "unavailable" | "error";
   captureDate: string | null;
   resolutionCm: number | null;
+  attribution?: string;
 };
 type SavedEstimate = { id: string; address: string; total: number; measurements: number; updatedAt: string };
 type IntegrationStatus = { jobber: boolean; quickbooks: boolean; hubspot: boolean; webhook: boolean };
@@ -361,7 +362,7 @@ export function CredibleTakeoffWorkspace() {
       const signature = `${config.provider}:${config.tileUrl}:${config.maxZoom}`;
       let fallback = false;
       if (signature !== imagerySignatureRef.current) {
-        const layer = L.tileLayer(config.tileUrl, { maxZoom: config.maxZoom, ...(config.nativeMaxZoom === null ? {} : { maxNativeZoom: config.nativeMaxZoom ?? config.maxZoom }), crossOrigin: "anonymous", attribution: config.provider === "nearmap" ? "Imagery © Nearmap" : config.provider === "mapbox" ? "Imagery © Mapbox" : "Imagery © Esri and contributors" });
+        const layer = L.tileLayer(config.tileUrl, { maxZoom: config.maxZoom, ...(config.nativeMaxZoom === null ? {} : { maxNativeZoom: config.nativeMaxZoom ?? config.maxZoom }), crossOrigin: "anonymous", attribution: config.attribution ?? (config.provider === "nearmap" ? "Imagery © Nearmap" : config.provider === "mapbox" ? "Imagery © Mapbox" : "Imagery © Esri and contributors") });
         const loaded = await activateTileLayer(map, layer, baseLayerRef.current);
         if (loaded) { baseLayerRef.current = layer; imagerySignatureRef.current = signature; }
         else fallback = true;

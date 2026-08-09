@@ -160,6 +160,7 @@ button { cursor: pointer; }
 @keyframes scanPulse { from { opacity: .35; } to { opacity: .95; } }
 .sample-detection-overlay { position: absolute; z-index: 8; inset: 0; pointer-events: none; }
 .sample-detection-overlay > b { position: absolute; left: 50%; top: 70%; transform: translateX(-50%); min-width: max-content; border: 1px solid var(--amber); background: rgba(17,17,15,.94); color: var(--amber); padding: 8px 10px; font: 900 7px monospace; letter-spacing: .1em; }
+.sample-detection-overlay > small { position: absolute; left: 50%; top: calc(70% + 35px); transform: translateX(-50%); min-width: max-content; background: rgba(17,17,15,.86); color: #d7d2c8; padding: 5px 8px; font: 700 6px monospace; letter-spacing: .07em; }
 .scan-hud { position: absolute; z-index: 9; top: 72px; left: 17px; right: 17px; display: flex; justify-content: space-between; color: white; font: 800 7px monospace; letter-spacing: .1em; text-shadow: 0 1px 4px #000; }
 .scan-hud span i { width: 6px; height: 6px; background: #6de889; display: inline-block; border-radius: 50%; margin-right: 5px; }
 .lot-selection-guide { position: absolute; z-index: 10; left: 50%; bottom: 24px; width: min(360px, calc(100% - 34px)); transform: translateX(-50%); display: flex; flex-direction: column; gap: 5px; padding: 13px 15px; background: rgba(17,17,15,.94); border: 1px solid var(--amber); color: white; pointer-events: none; box-shadow: 4px 4px 0 rgba(255,180,0,.72); }
@@ -176,6 +177,18 @@ button { cursor: pointer; }
 .map-summary.editable b { display: flex; align-items: center; gap: 7px; }
 .map-summary.editable button { width: 20px; height: 20px; display: grid; place-items: center; border: 1px solid #5f5e56; background: transparent; color: white; padding: 0; line-height: 1; }
 .map-summary.editable button:hover { border-color: var(--amber); color: var(--amber); }
+.demo-marking-toolbar { position: absolute; z-index: 12; top: 98px; left: 18px; width: min(390px, calc(100% - 36px)); border: 1px solid #625f57; background: rgba(17,17,15,.95); padding: 10px; color: white; box-shadow: 5px 5px 0 rgba(255,180,0,.4); }
+.demo-marking-toolbar > span { display: block; margin-bottom: 7px; color: var(--amber); font: 900 7px monospace; letter-spacing: .09em; }
+.demo-marking-toolbar > div { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.demo-marking-toolbar button { min-height: 31px; border: 1px solid #5b5952; background: #282722; color: white; padding: 0 6px; font: 900 6px Arial; letter-spacing: .06em; }
+.demo-marking-toolbar button.active { border-color: var(--amber); background: var(--amber); color: var(--ink); }
+.demo-marking-toolbar button.done { color: #79d889; }
+.demo-marking-toolbar button.done.active { color: var(--ink); }
+.demo-marking-toolbar small { display: block; margin-top: 7px; color: #aaa69d; font-size: 6px; line-height: 1.4; }
+.lot-canvas.marking .demo-real-map { cursor: crosshair; }
+.demo-count-marker { display: grid !important; place-items: center; border: 2px solid white; border-radius: 3px; background: var(--amber); color: var(--ink); box-shadow: 0 2px 8px rgba(0,0,0,.6); font: 900 8px Arial; }
+.demo-count-ada { background: #2f8cff; color: white; }
+.demo-count-arrow { border-radius: 50%; background: #62d77c; font-size: 14px; }
 .quote-preview { background: #fbfaf6; padding: 24px 21px; opacity: .48; filter: grayscale(1); transition: opacity .5s ease, filter .5s ease, transform .5s ease; transform: translateX(5px); }
 .quote-preview.revealed { opacity: 1; filter: none; transform: translateX(0); }
 .quote-top { display: flex; justify-content: space-between; align-items: center; padding-bottom: 19px; border-bottom: 2px solid var(--ink); }
@@ -815,6 +828,9 @@ button { cursor: pointer; }
   .map-summary.editable div { min-width: 72px; padding: 8px 6px; }
   .map-summary.editable b { gap: 3px; }
   .edit-demo-boundary { right: 10px; bottom: 94px; }
+  .demo-marking-toolbar { top: 82px; left: 10px; width: calc(100% - 20px); padding: 8px; }
+  .demo-marking-toolbar > span { font-size: 6px; }
+  .demo-marking-toolbar small, .sample-detection-overlay { display: none; }
   .quote-preview { padding: 21px 16px; }
   .workflow-section { width: calc(100% - 30px); }
   .workflow-section h2 { font-size: 43px; }

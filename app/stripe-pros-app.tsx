@@ -394,7 +394,6 @@ function HomeScreen({ onAuthenticated }: { onAuthenticated: (user: User) => void
         <div className="hero-badge"><i /> PURPOSE-BUILT FOR PARKING LOT CONTRACTORS</div>
         <h1>From address to<br /><em>quote in minutes.</em></h1>
         <p>Measure the lot from your desk, price every stripe, and send a proposal that wins the job.</p>
-        <div className="hero-actions"><a className="hero-workspace-action" href="/workspace">Open the live workspace <span>→</span></a><a href="#product-demo">See how it works <span>↓</span></a></div>
       </section>
       <div id="product-demo"><ProductDemo /></div>
       <section className="workflow-section" id="how-it-works">

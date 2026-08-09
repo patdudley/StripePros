@@ -207,7 +207,7 @@ button { cursor: pointer; }
 .pricing-section::before { content: ""; position: absolute; inset: 0; opacity: .11; background-image: radial-gradient(#111 0.7px, transparent 0.7px); background-size: 7px 7px; }
 .pricing-section > * { position: relative; z-index: 1; }
 .pricing-heading { display: flex; justify-content: space-between; align-items: end; gap: 40px; margin-bottom: 42px; }
-.pricing-heading p { margin: 0 0 16px; font: 900 9px monospace; letter-spacing: .16em; }
+.pricing-heading p { margin: 0 0 16px; }
 .pricing-heading h2 { margin: 0; font-size: clamp(45px, 5.5vw, 76px); letter-spacing: -.065em; line-height: .92; }
 .pricing-heading h2 em { font-style: normal; color: #fff9e7; }
 .pricing-heading > span { max-width: 220px; padding: 11px 13px; border: 1px solid rgba(17,17,15,.4); font: 900 8px monospace; letter-spacing: .1em; text-transform: uppercase; }
@@ -230,7 +230,8 @@ button { cursor: pointer; }
 .pricing-card button { height: 45px; margin-top: auto; border: 1px solid var(--ink); background: var(--ink); color: var(--amber); padding: 0 15px; display: flex; justify-content: space-between; align-items: center; font: 900 8px Arial; letter-spacing: .1em; }
 .pricing-card.scale button { border-color: var(--amber); background: var(--amber); color: var(--ink); }
 .pricing-card button b { font-size: 14px; }
-.pricing-note { margin: 22px 0 0; text-align: center; font: 800 8px monospace; letter-spacing: .07em; }
+.pricing-heading p, .pricing-note { font: 900 10px monospace; letter-spacing: .12em; }
+.pricing-note { margin: 22px 0 0; text-align: center; }
 .home-footer { min-height: 120px; background: var(--ink); color: var(--paper); padding: 32px max(24px, calc((100vw - 1160px) / 2)); display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; }
 .home-footer .wordmark { color: var(--amber); }
 .home-footer p { color: #85837c; font-size: 11px; }

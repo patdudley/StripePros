@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { apiError, json } from "@/lib/api";
 import { getScheduleOwnerId } from "@/lib/schedule/auth";
+import { syncJobToGoogle } from "@/lib/schedule/google-calendar";
 import { createScheduledJob, listScheduledJobs } from "@/lib/schedule/store";
 
 export const scheduledJobSchema = z.object({
@@ -30,7 +31,11 @@ export async function POST(request: Request) {
   try {
     const ownerId = await getScheduleOwnerId(request);
     if (!ownerId) return json({ error: "Sign in to use the Scale schedule." }, 401);
-    const job = await createScheduledJob(ownerId, scheduledJobSchema.parse(await request.json()));
-    return json({ job }, 201);
+    let job = await createScheduledJob(ownerId, scheduledJobSchema.parse(await request.json()));
+    if (!job) throw new Error("Job could not be saved.");
+    let calendarWarning: string | undefined;
+    try { job = await syncJobToGoogle(ownerId, job); }
+    catch (error) { calendarWarning = error instanceof Error ? error.message : "Google Calendar sync failed."; }
+    return json({ job, calendarWarning }, 201);
   } catch (error) { return apiError(error); }
 }

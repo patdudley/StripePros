@@ -155,6 +155,13 @@ export function CredibleTakeoffWorkspace() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
+      if (new URLSearchParams(window.location.search).get("view") === "schedule") setView("schedule");
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
       const stored = window.localStorage.getItem("stripepros_demo_estimates");
       if (!stored) return;
       try { setSaved(JSON.parse(stored) as SavedEstimate[]); } catch { /* ignore invalid device cache */ }

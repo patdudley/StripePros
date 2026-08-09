@@ -521,6 +521,13 @@ button { cursor: pointer; }
 .weather-legend { display: flex; gap: 5px; }
 .weather-legend span { display: flex; align-items: center; gap: 5px; border: 1px solid #4c4a44; padding: 7px 9px; color: #d8d4cb; font-size: 6px; }
 .weather-legend i, .calendar-job > i, .risk-panel button > i { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: #aaa69c; }
+.scale-ops-actions { display: grid; justify-items: end; gap: 9px; }
+.google-calendar-actions { min-height: 31px; display: flex; align-items: center; gap: 5px; }
+.google-calendar-actions > span { color: #70ce80; font: 900 6px monospace; letter-spacing: .09em; }
+.google-calendar-actions > a, .google-calendar-actions > button { height: 30px; display: inline-flex; align-items: center; border: 1px solid #5f5c55; background: transparent; color: var(--amber); padding: 0 10px; font: 900 6px Arial; letter-spacing: .08em; text-decoration: none; }
+.google-calendar-actions > a { background: var(--amber); color: var(--ink); }
+.google-calendar-actions > button:disabled { opacity: .55; }
+.google-calendar-actions > .disconnect-calendar { color: #aaa69e; }
 .risk-good i, i.risk-good { background: #62bf72; }
 .risk-watch i, i.risk-watch { background: var(--amber); }
 .risk-high i, i.risk-high { background: #e94d3d; }

@@ -12,6 +12,7 @@ type WeatherDay = {
   precipitationProbability: number; precipitationInches: number; windGustMph: number;
 };
 type JobDraft = Omit<ScheduledJob, "id" | "createdAt" | "updatedAt">;
+type CalendarStatus = { configured: boolean; connected: boolean; lastSyncedAt: string | null };
 
 const statusLabels: Record<JobStatus, string> = { scheduled: "Scheduled", in_progress: "In progress", completed: "Completed" };
 const monthFormatter = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" });
@@ -44,11 +45,20 @@ export function ScheduleView() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [calendarStatus, setCalendarStatus] = useState<CalendarStatus | null>(null);
   const [message, setMessage] = useState("");
 
   const gridStart = useMemo(() => addDays(month, -month.getDay()), [month]);
   const days = useMemo(() => Array.from({ length: 42 }, (_, index) => addDays(gridStart, index)), [gridStart]);
   const gridEnd = days[41];
+
+  async function loadJobs() {
+    const response = await fetch(`/api/schedule/jobs?from=${dateKey(gridStart)}&to=${dateKey(gridEnd)}`);
+    const result = await response.json() as { jobs?: ScheduledJob[]; error?: string };
+    if (!response.ok) throw new Error(result.error || "Could not load scheduled jobs.");
+    setJobs(result.jobs || []);
+  }
 
   useEffect(() => {
     let alive = true;
@@ -56,12 +66,30 @@ export function ScheduleView() {
       .then(async (response) => {
         const result = await response.json() as { jobs?: ScheduledJob[]; error?: string };
         if (!response.ok) throw new Error(result.error || "Could not load scheduled jobs.");
-        if (alive) { setJobs(result.jobs || []); setMessage(""); }
+        if (alive) { setJobs(result.jobs || []); }
       })
       .catch((error: Error) => alive && setMessage(error.message))
       .finally(() => alive && setLoading(false));
     return () => { alive = false; };
   }, [gridEnd, gridStart]);
+
+  useEffect(() => {
+    let alive = true;
+    void fetch("/api/integrations/google-calendar/status")
+      .then(async (response) => {
+        const result = await response.json() as CalendarStatus & { error?: string };
+        if (!response.ok) throw new Error(result.error || "Could not load Google Calendar status.");
+        if (alive) setCalendarStatus(result);
+      })
+      .catch((error: Error) => alive && setMessage(error.message));
+    const params = new URLSearchParams(window.location.search);
+    const calendarResult = params.get("calendar");
+    const timer = window.setTimeout(() => {
+      if (calendarResult === "connected") setMessage("Google Calendar connected. Your scheduled jobs are synced.");
+      if (calendarResult === "error" || calendarResult === "not-configured") setMessage(params.get("reason") || "Google Calendar could not be connected.");
+    }, 0);
+    return () => { alive = false; window.clearTimeout(timer); };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -127,6 +155,26 @@ export function ScheduleView() {
     else setMessage("Job could not be removed.");
   }
 
+  async function syncCalendar() {
+    setSyncing(true); setMessage("");
+    try {
+      const response = await fetch("/api/integrations/google-calendar/sync", { method: "POST" });
+      const result = await response.json() as { pulled?: number; pushed?: number; syncedAt?: string; error?: string };
+      if (!response.ok) throw new Error(result.error || "Google Calendar could not be synced.");
+      await loadJobs();
+      setCalendarStatus((current) => current ? { ...current, connected: true, lastSyncedAt: result.syncedAt || new Date().toISOString() } : current);
+      setMessage(`Google Calendar synced. ${result.pulled || 0} updated and ${result.pushed || 0} added.`);
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Google Calendar could not be synced."); }
+    finally { setSyncing(false); }
+  }
+
+  async function disconnectCalendar() {
+    if (!window.confirm("Disconnect Google Calendar? Existing Google events will stay on the calendar.")) return;
+    const response = await fetch("/api/integrations/google-calendar/status", { method: "DELETE" });
+    if (response.ok) { setCalendarStatus((current) => current ? { ...current, connected: false, lastSyncedAt: null } : current); setMessage("Google Calendar disconnected. Existing events were left in place."); }
+    else setMessage("Google Calendar could not be disconnected.");
+  }
+
   const atRisk = jobs
     .map((job) => ({ job, weather: weatherFor(job) }))
     .filter((item): item is { job: ScheduledJob; weather: WeatherDay } => Boolean(item.weather && item.weather.level !== "good"))
@@ -136,7 +184,12 @@ export function ScheduleView() {
     <header><div><p>SCALE PLAN · JOB OPERATIONS</p><h1>Schedule + weather</h1></div><button onClick={() => openNew()}>＋ ADD JOB</button></header>
     <div className="weather-overview">
       <div><span>16-DAY WEATHER LOOKAHEAD</span><strong>{atRisk.length ? `${atRisk.length} upcoming job${atRisk.length === 1 ? "" : "s"} need attention` : "No weather risks found"}</strong><small>Rain, temperature and wind screening for scheduled job locations.</small></div>
-      <div className="weather-legend"><span className="risk-good"><i />GOOD</span><span className="risk-watch"><i />WATCH</span><span className="risk-high"><i />HIGH RISK</span></div>
+      <div className="scale-ops-actions">
+        <div className="weather-legend"><span className="risk-good"><i />GOOD</span><span className="risk-watch"><i />WATCH</span><span className="risk-high"><i />HIGH RISK</span></div>
+        <div className="google-calendar-actions">
+          {calendarStatus?.connected ? <><span>● GOOGLE CALENDAR CONNECTED</span><button disabled={syncing} onClick={() => void syncCalendar()}>{syncing ? "SYNCING…" : "SYNC NOW"}</button><button className="disconnect-calendar" onClick={() => void disconnectCalendar()}>DISCONNECT</button></> : calendarStatus?.configured ? <a href="/api/integrations/google-calendar/connect">CONNECT GOOGLE CALENDAR →</a> : <span>GOOGLE CALENDAR SETUP REQUIRED</span>}
+        </div>
+      </div>
     </div>
     {message && <p className="schedule-message">{message}</p>}
     <div className="schedule-layout">

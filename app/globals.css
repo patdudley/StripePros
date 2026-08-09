@@ -213,7 +213,7 @@ button { cursor: pointer; }
 .pricing-heading > span { max-width: 220px; padding: 11px 13px; border: 1px solid rgba(17,17,15,.4); font: 900 8px monospace; letter-spacing: .1em; text-transform: uppercase; }
 .pricing-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .pricing-card { min-height: 390px; display: flex; flex-direction: column; padding: 25px; border: 1px solid rgba(17,17,15,.48); background: #fffaf0; }
-.pricing-card.scale { background: var(--ink); color: #fff; box-shadow: 8px 8px 0 rgba(255,255,255,.82); }
+.pricing-card.scale { background: var(--ink); color: #fff; }
 .pricing-card > span { color: #79756c; font: 900 8px monospace; letter-spacing: .15em; }
 .pricing-card.scale > span { color: var(--amber); }
 .pricing-card h3 { min-height: 46px; margin: 15px 0 24px; font-size: 24px; letter-spacing: -.045em; }

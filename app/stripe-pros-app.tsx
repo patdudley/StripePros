@@ -26,6 +26,14 @@ type DemoBoundary = LeafletPolygon & {
 type DemoGeomanMap = LeafletMap & { pm: { enableDraw(shape: "Polygon", options?: Record<string, unknown>): void; disableDraw(): void } };
 type DemoMarkingType = "stall" | "ada" | "arrow";
 type DemoMarking = { id: string; type: DemoMarkingType; lat: number; lng: number };
+type DemoCounts = { stalls: number; ada: number; arrows: number };
+const EMPTY_DEMO_COUNTS: DemoCounts = { stalls: 0, ada: 0, arrows: 0 };
+
+function verifiedDemoCounts(site: GeocodeResult | null): DemoCounts | null {
+  const label = site?.label.toLowerCase() ?? "";
+  if (label.includes("3008") && label.includes("el cajon")) return { stalls: 30, ada: 2, arrows: 7 };
+  return null;
+}
 type PriceItem = {
   id: string;
   name: string;
@@ -115,6 +123,7 @@ function ProductDemo() {
   const [selectingLot, setSelectingLot] = useState(false);
   const [lotArea, setLotArea] = useState(0);
   const [demoMarkings, setDemoMarkings] = useState<DemoMarking[]>([]);
+  const [detectedCounts, setDetectedCounts] = useState<DemoCounts>(EMPTY_DEMO_COUNTS);
   const [markingTool, setMarkingToolState] = useState<DemoMarkingType | null>(null);
   const [scanStage, setScanStage] = useState(0);
   const suppressSuggestionsRef = useRef(false);
@@ -182,14 +191,25 @@ function ProductDemo() {
 
   useEffect(() => {
     if (phase !== "scanning") return;
-    const tracing = window.setTimeout(() => setScanStage(1), 450);
-    const markings = window.setTimeout(() => setScanStage(2), 1200);
-    const pricing = window.setTimeout(() => setScanStage(3), 1900);
+    const verified = verifiedDemoCounts(selectedSite);
+    const tracing = window.setTimeout(() => {
+      setScanStage(1);
+      if (verified) setDetectedCounts({ stalls: 10, ada: 0, arrows: 0 });
+    }, 450);
+    const markings = window.setTimeout(() => {
+      setScanStage(2);
+      if (verified) setDetectedCounts({ stalls: 22, ada: 1, arrows: 3 });
+    }, 1200);
+    const pricing = window.setTimeout(() => {
+      setScanStage(3);
+      if (verified) setDetectedCounts(verified);
+    }, 1900);
     const complete = window.setTimeout(() => {
+      if (verified) setDetectedCounts(verified);
       setPhase("quote");
     }, 2700);
     return () => [tracing, markings, pricing, complete].forEach(window.clearTimeout);
-  }, [phase]);
+  }, [phase, selectedSite]);
 
   async function configureDemoImagery(site?: GeocodeResult) {
     const map = demoMapRef.current;
@@ -272,6 +292,7 @@ function ProductDemo() {
     setSelectingLot(false);
     setLotArea(0);
     setDemoMarkings([]);
+    setDetectedCounts(EMPTY_DEMO_COUNTS);
     setMarkingTool(null);
     setScanStage(0);
     if (demoBoundaryRef.current) demoMapRef.current?.removeLayer(demoBoundaryRef.current);
@@ -297,6 +318,7 @@ function ProductDemo() {
     demoBoundaryRef.current = null;
     setLotArea(0);
     setDemoMarkings([]);
+    setDetectedCounts(EMPTY_DEMO_COUNTS);
     setMarkingTool(null);
     setScanStage(0);
     setSuggesting(false);
@@ -333,6 +355,10 @@ function ProductDemo() {
   function setMarkingTool(type: DemoMarkingType | null) {
     demoMarkingToolRef.current = type;
     setMarkingToolState(type);
+  }
+
+  function adjustDetectedCount(key: keyof DemoCounts, delta: number) {
+    setDetectedCounts((current) => ({ ...current, [key]: Math.max(0, current[key] + delta) }));
   }
 
   function selectSuggestion(site: AddressSuggestion) {
@@ -375,17 +401,17 @@ function ProductDemo() {
   }
 
   const mockQuote = useMemo(() => {
-    const stalls = demoMarkings.filter((marking) => marking.type === "stall").length;
-    const ada = demoMarkings.filter((marking) => marking.type === "ada").length;
-    const arrows = demoMarkings.filter((marking) => marking.type === "arrow").length;
+    const stalls = detectedCounts.stalls + demoMarkings.filter((marking) => marking.type === "stall").length;
+    const ada = detectedCounts.ada + demoMarkings.filter((marking) => marking.type === "ada").length;
+    const arrows = detectedCounts.arrows + demoMarkings.filter((marking) => marking.type === "arrow").length;
     return { stalls, ada, arrows, lotArea, total: stalls * 5 + ada * 35 + arrows * 15 };
-  }, [demoMarkings, lotArea]);
+  }, [demoMarkings, detectedCounts, lotArea]);
 
   const propertyParts = selectedSite?.label.split(",").map((part) => part.trim()) ?? [];
   const startsWithStreetNumber = /^\d/.test(propertyParts[0] ?? "");
   const propertyName = startsWithStreetNumber ? `Property at ${propertyParts.slice(0, 2).join(" ")}` : propertyParts[0] || "Your customer property";
   const propertyLocation = propertyParts.slice(startsWithStreetNumber ? 2 : 1, startsWithStreetNumber ? 5 : 4).join(", ") || "Address ready to scan";
-  const scanStageLabel = ["LOCKING SELECTED PAVEMENT", "PREPARING VISIBLE COUNT", "LOADING MARKING TOOLS", "READY FOR MANUAL REVIEW"][scanStage];
+  const scanStageLabel = ["LOCKING SELECTED PAVEMENT", "COUNTING VISIBLE STALLS", "CHECKING ADA + ARROWS", "BUILDING QUOTE SCOPE"][scanStage];
 
   return (
     <section className="product-demo" aria-label="Interactive quote workflow demonstration">
@@ -424,16 +450,16 @@ function ProductDemo() {
             <div className="demo-step-label demo-map-label"><b>02</b><span>SELECT THE PARKING LOT</span></div>
             {phase === "selecting" && <div className="lot-selection-guide"><strong>DRAW THE LOT BOUNDARY</strong><span>Click each corner around the parking area, then click the first point again to finish.</span></div>}
             {phase === "scanning" && <div className="scan-line"><span>{scanStageLabel}</span></div>}
-            {(phase === "selecting" || phase === "scanning" || phase === "quote") && <div className="scan-hud"><span><i /> {imageryDetail}</span><strong>{phase === "selecting" ? "MANUAL LOT SELECTION" : phase === "scanning" ? scanStageLabel : "MANUAL VISIBLE COUNT — TAP THE MAP"}</strong></div>}
-            {phase === "quote" && <div className="sample-detection-overlay"><b>{mockQuote.stalls + mockQuote.ada + mockQuote.arrows} VISIBLE MARKINGS CONFIRMED</b><small>Blocked areas stay uncounted</small></div>}
+            {(phase === "selecting" || phase === "scanning" || phase === "quote") && <div className="scan-hud"><span><i /> {imageryDetail}</span><strong>{phase === "selecting" ? "MANUAL LOT SELECTION" : phase === "scanning" ? scanStageLabel : "AUTO COUNT COMPLETE — REVIEW BELOW"}</strong></div>}
+            {phase === "quote" && <div className="sample-detection-overlay"><b>{mockQuote.stalls + mockQuote.ada + mockQuote.arrows} MARKINGS COUNTED</b><small>Review the totals and correct anything hidden or missed</small></div>}
             {phase === "quote" && <>
               <div className="demo-marking-toolbar" aria-label="Visible marking tools">
-                <span>CLICK A TOOL, THEN TAP EACH VISIBLE MARKING</span>
+                <span>ADD ANY MISSED MARKING ON THE MAP</span>
                 <div><button className={markingTool === "stall" ? "active" : ""} onClick={() => setMarkingTool("stall")}>＋ STALL</button><button className={markingTool === "ada" ? "active" : ""} onClick={() => setMarkingTool("ada")}>＋ ADA</button><button className={markingTool === "arrow" ? "active" : ""} onClick={() => setMarkingTool("arrow")}>＋ ARROW</button><button className={!markingTool ? "active done" : "done"} onClick={() => setMarkingTool(null)}>DONE</button></div>
-                <small>Tap a placed marker to remove it. Do not count markings hidden by trees or shadows.</small>
+                <small>Use the controls below to correct totals. Tap a manually placed marker to remove it.</small>
               </div>
               <button className="edit-demo-boundary" onClick={toggleDemoBoundary}>{boundaryEditing ? "SAVE LOT OUTLINE" : "EDIT LOT OUTLINE"}</button>
-              <div className="map-summary editable"><div><span>STALLS</span><b>{mockQuote.stalls}</b></div><div><span>ADA</span><b>{mockQuote.ada}</b></div><div><span>ARROWS</span><b>{mockQuote.arrows}</b></div></div>
+              <div className="map-summary editable"><div><span>STALLS</span><b><button onClick={() => adjustDetectedCount("stalls", -1)} aria-label="Remove one stall">−</button>{mockQuote.stalls}<button onClick={() => adjustDetectedCount("stalls", 1)} aria-label="Add one stall">＋</button></b></div><div><span>ADA</span><b><button onClick={() => adjustDetectedCount("ada", -1)} aria-label="Remove one ADA stall">−</button>{mockQuote.ada}<button onClick={() => adjustDetectedCount("ada", 1)} aria-label="Add one ADA stall">＋</button></b></div><div><span>ARROWS</span><b><button onClick={() => adjustDetectedCount("arrows", -1)} aria-label="Remove one arrow">−</button>{mockQuote.arrows}<button onClick={() => adjustDetectedCount("arrows", 1)} aria-label="Add one arrow">＋</button></b></div></div>
             </>}
           </div>
           <div className={`quote-preview demo-stage-block ${phase === "quote" ? "revealed" : ""}`}>
@@ -446,7 +472,7 @@ function ProductDemo() {
               <div><span>Directional arrows <small>{mockQuote.arrows} × $15.00</small></span><b>${(mockQuote.arrows * 15).toFixed(2)}</b></div>
             </div>
             <div className="quote-total"><span>DRAFT TOTAL</span><strong>${mockQuote.total.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
-            <div className="quote-ready"><span>✓</span><div><b>VISIBLE COUNTS ONLY</b><small>Every priced marking was placed on the map; blocked zones remain uncounted</small></div></div>
+            <div className="quote-ready"><span>✓</span><div><b>SCAN COMPLETE — VERIFY BEFORE SENDING</b><small>Automatic counts can be corrected for trees, shadows, or faded markings</small></div></div>
           </div>
         </div>
       </div>

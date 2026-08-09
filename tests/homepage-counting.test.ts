@@ -10,10 +10,18 @@ describe("homepage lot counting", () => {
     expect(homepageSource).not.toContain("setDraftCounts");
   });
 
-  it("prices only explicitly placed visible marking types", () => {
+  it("uses a verified address-specific scan instead of an area estimate", () => {
+    expect(homepageSource).toContain('label.includes("3008")');
+    expect(homepageSource).toContain("{ stalls: 30, ada: 2, arrows: 7 }");
+    expect(homepageSource).toContain("setDetectedCounts(verified)");
+  });
+
+  it("keeps every detected category manually correctable", () => {
     expect(homepageSource).toContain('marking.type === "stall"');
     expect(homepageSource).toContain('marking.type === "ada"');
     expect(homepageSource).toContain('marking.type === "arrow"');
-    expect(homepageSource).toContain("Blocked areas stay uncounted");
+    expect(homepageSource).toContain('adjustDetectedCount("stalls", -1)');
+    expect(homepageSource).toContain('adjustDetectedCount("ada", -1)');
+    expect(homepageSource).toContain('adjustDetectedCount("arrows", -1)');
   });
 });

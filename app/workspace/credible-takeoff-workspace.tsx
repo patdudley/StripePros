@@ -11,6 +11,7 @@ import { pavementAreaSqFt } from "@/lib/takeoff/geometry";
 import { aggregateAnnotationQuote, DEFAULT_TAKEOFF_PRICES } from "@/lib/takeoff/quote";
 import { generateStallRow } from "@/lib/takeoff/row-assist";
 import type { AnnotationReviewStatus, AnnotationType, ExclusionType, LotExclusion, PolygonGeometry, StripingService, TakeoffAnnotation, TakeoffGeometry } from "@/lib/takeoff/types";
+import { ScheduleView } from "./schedule-view";
 
 type GeocodeResult = { label: string; lat: number; lng: number };
 type MapImageryConfig = {
@@ -120,7 +121,7 @@ export function CredibleTakeoffWorkspace() {
   const undoRef = useRef<TakeoffAnnotation[][]>([]);
   const redoRef = useRef<TakeoffAnnotation[][]>([]);
 
-  const [view, setView] = useState<"takeoff" | "saved" | "customers" | "integrations">("takeoff");
+  const [view, setView] = useState<"takeoff" | "saved" | "customers" | "schedule" | "integrations">("takeoff");
   const [address, setAddress] = useState("3008 El Cajon Blvd, San Diego, CA 92104");
   const [siteAddress, setSiteAddress] = useState("No property selected");
   const [selectedSite, setSelectedSite] = useState<GeocodeResult | null>(null);
@@ -511,6 +512,7 @@ export function CredibleTakeoffWorkspace() {
       <button className={view === "takeoff" ? "active" : ""} onClick={() => setView("takeoff")}><span>⌖</span> TAKEOFF</button>
       <button className={view === "saved" ? "active" : ""} onClick={() => setView("saved")}><span>▤</span> ESTIMATES <b>{saved.length}</b></button>
       <button className={view === "customers" ? "active" : ""} onClick={() => setView("customers")}><span>◎</span> CUSTOMERS</button>
+      <button className={view === "schedule" ? "active" : ""} onClick={() => setView("schedule")}><span>□</span> SCHEDULE <b>SCALE</b></button>
       <button className={view === "integrations" ? "active" : ""} onClick={() => setView("integrations")}><span>↔</span> INTEGRATIONS</button>
       <Link href="/"><span>↙</span> MARKETING SITE</Link>
       <div className="quote-sidebar-foot"><p>TAKEOFF STATUS</p><strong>{countsVerified ? "COUNTS VERIFIED" : boundary ? "REVIEW REQUIRED" : "SELECT A LOT"}</strong><span>{acceptedAnnotations.length} accepted annotation{acceptedAnnotations.length === 1 ? "" : "s"}</span></div>
@@ -567,6 +569,7 @@ export function CredibleTakeoffWorkspace() {
 
     {view === "saved" && <section className="workspace-list-view"><header><div><p>ESTIMATES</p><h1>Quote pipeline</h1></div><button onClick={() => setView("takeoff")}>＋ NEW ESTIMATE</button></header><div className="saved-table"><div className="saved-table-head"><span>SITE</span><span>ANNOTATIONS</span><span>TOTAL</span><span>UPDATED</span></div>{!saved.length ? <div className="saved-empty"><strong>No saved estimates yet.</strong><span>Save a verified takeoff to see it here.</span></div> : saved.map((estimate) => <button className="saved-row" key={estimate.id} onClick={() => { setAddress(estimate.address); setView("takeoff"); }}><span><strong>{estimate.address}</strong><small>Manual takeoff</small></span><span>{estimate.measurements}</span><b>{currency.format(estimate.total)}</b><time>{new Date(estimate.updatedAt).toLocaleDateString()}</time></button>)}</div></section>}
     {view === "customers" && <section className="workspace-list-view"><header><div><p>CUSTOMERS</p><h1>Customer directory</h1></div><button>＋ ADD CUSTOMER</button></header><div className="customer-cards"><article className="customer-placeholder"><strong>Customers stay attached to estimates.</strong><p>Account-backed customer persistence remains available through the existing product database.</p></article></div></section>}
+    {view === "schedule" && <ScheduleView />}
     {view === "integrations" && <IntegrationHub address={siteAddress} total={calculation.total} itemCount={quoteLines.length} />}
   </main>;
 }

@@ -510,6 +510,77 @@ button { cursor: pointer; }
 .partner-strip strong { font-size: 14px; }
 .partner-strip p { margin: 0; color: #aaa79e; font-size: 9px; line-height: 1.5; }
 
+/* Scale schedule and weather operations */
+.schedule-view { position: relative; background: #efede7; }
+.schedule-view > header { align-items: center; }
+.weather-overview { min-height: 102px; display: flex; justify-content: space-between; align-items: center; gap: 24px; margin-bottom: 13px; padding: 20px 24px; background: var(--ink); color: white; }
+.weather-overview > div:first-child { display: grid; gap: 4px; }
+.weather-overview span, .risk-panel > div > span { color: var(--amber); font: 900 7px monospace; letter-spacing: .12em; }
+.weather-overview strong { font-size: 21px; letter-spacing: -.03em; }
+.weather-overview small { color: #aaa79e; font-size: 8px; }
+.weather-legend { display: flex; gap: 5px; }
+.weather-legend span { display: flex; align-items: center; gap: 5px; border: 1px solid #4c4a44; padding: 7px 9px; color: #d8d4cb; font-size: 6px; }
+.weather-legend i, .calendar-job > i, .risk-panel button > i { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: #aaa69c; }
+.risk-good i, i.risk-good { background: #62bf72; }
+.risk-watch i, i.risk-watch { background: var(--amber); }
+.risk-high i, i.risk-high { background: #e94d3d; }
+.schedule-message { margin: 0 0 12px; border-left: 4px solid var(--amber); background: #fff; padding: 10px 13px; color: #5e5b54; font-size: 9px; font-weight: 800; }
+.schedule-layout { display: grid; grid-template-columns: minmax(650px, 1fr) 310px; gap: 12px; align-items: start; }
+.calendar-card { position: relative; border: 1px solid #c5c1b8; background: white; }
+.calendar-toolbar { min-height: 55px; display: grid; grid-template-columns: 34px 54px 1fr 34px; align-items: center; gap: 5px; padding: 0 11px; border-bottom: 1px solid #d7d3ca; }
+.calendar-toolbar h2 { margin: 0; text-align: center; font-size: 18px; letter-spacing: -.03em; }
+.calendar-toolbar button { height: 28px; border: 1px solid #c9c5bb; background: #f4f2ec; color: #5d5a53; font-size: 7px; font-weight: 900; }
+.calendar-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); background: #dfdcd4; }
+.calendar-weekdays span { padding: 8px; color: #716e67; font: 900 6px monospace; letter-spacing: .1em; text-transform: uppercase; }
+.calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.calendar-grid > div { min-width: 0; min-height: 105px; border-right: 1px solid #e1ded6; border-bottom: 1px solid #e1ded6; padding: 5px; }
+.calendar-grid > div:nth-child(7n) { border-right: 0; }
+.calendar-grid > div.outside { background: #f3f1eb; color: #aaa69d; }
+.calendar-grid > div.today { box-shadow: inset 0 0 0 2px var(--amber); }
+.calendar-date { width: 23px; height: 23px; display: grid; place-items: center; border: 0; background: transparent; color: inherit; font: 900 8px monospace; }
+.calendar-grid > div.today .calendar-date { background: var(--amber); color: var(--ink); }
+.calendar-job { width: 100%; min-width: 0; display: grid; grid-template-columns: 8px minmax(0, 1fr); gap: 2px 5px; margin-top: 3px; border: 0; border-left: 3px solid #7b7770; background: #eeece5; padding: 5px; color: var(--ink); text-align: left; }
+.calendar-job.status-in_progress { border-left-color: var(--amber); background: #fff3c9; }
+.calendar-job.status-completed { opacity: .55; }
+.calendar-job > i { grid-row: 1 / 3; align-self: center; }
+.calendar-job span, .calendar-job small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.calendar-job span { font-size: 7px; font-weight: 900; }
+.calendar-job small { color: #77736c; font-size: 6px; }
+.calendar-more { display: block; padding: 5px; color: #8b877f; font: 800 6px monospace; }
+.calendar-loading { position: absolute; inset: 89px 0 0; display: grid; place-items: center; background: rgba(247,246,241,.78); color: #6f6b64; font: 900 8px monospace; letter-spacing: .1em; }
+.risk-panel { border: 1px solid #c5c1b8; background: white; }
+.risk-panel > div { height: 52px; display: flex; justify-content: space-between; align-items: center; padding: 0 14px; border-bottom: 1px solid #dedad1; background: var(--ink); }
+.risk-panel > div > b { color: white; font-size: 22px; }
+.risk-panel > p { min-height: 160px; display: grid; place-items: center; margin: 0; padding: 28px; color: #77736c; text-align: center; font-size: 9px; line-height: 1.5; }
+.risk-panel > button { width: 100%; display: grid; grid-template-columns: 9px minmax(0, 1fr) 34px; gap: 8px; align-items: start; border: 0; border-bottom: 1px solid #e0ddd5; background: white; padding: 12px; text-align: left; }
+.risk-panel > button > i { margin-top: 3px; }
+.risk-panel > button span { min-width: 0; display: grid; gap: 3px; }
+.risk-panel > button strong { font-size: 9px; }
+.risk-panel > button small { overflow: hidden; color: #77736d; font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
+.risk-panel > button em { color: #9b3c32; font-size: 7px; font-style: normal; line-height: 1.35; }
+.risk-panel > button > b { color: #5f5b54; font-size: 10px; text-align: right; }
+.risk-panel footer { padding: 14px; background: #eeeae2; }
+.risk-panel footer span { color: #7d5d00; font: 900 6px monospace; letter-spacing: .1em; }
+.risk-panel footer p { margin: 5px 0 8px; color: #6f6b63; font-size: 7px; line-height: 1.45; }
+.risk-panel footer a { color: #5f5b54; font: 800 6px monospace; }
+.schedule-editor-backdrop { position: fixed; z-index: 2000; inset: 0; display: grid; place-items: center; background: rgba(17,17,15,.67); padding: 18px; }
+.schedule-editor { width: min(620px, 100%); max-height: calc(100vh - 36px); overflow-y: auto; border-top: 7px solid var(--amber); background: #f8f6f0; padding: 22px; box-shadow: 12px 12px 0 rgba(0,0,0,.32); }
+.schedule-editor > header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 18px; }
+.schedule-editor > header span { color: #826000; font: 900 7px monospace; letter-spacing: .12em; }
+.schedule-editor h2 { margin: 4px 0 0; font-size: 25px; letter-spacing: -.04em; }
+.schedule-editor > header button { width: 34px; height: 34px; border: 0; background: var(--ink); color: white; font-size: 20px; }
+.schedule-editor > label, .schedule-editor-row label { display: grid; gap: 5px; margin-top: 10px; color: #6f6b63; font: 900 7px monospace; letter-spacing: .07em; }
+.schedule-editor input, .schedule-editor select, .schedule-editor textarea { width: 100%; border: 1px solid #c5c1b8; background: white; padding: 10px; color: var(--ink); font-family: Arial, sans-serif; font-size: 10px; font-weight: 700; outline: none; }
+.schedule-editor input, .schedule-editor select { height: 39px; }
+.schedule-editor textarea { min-height: 92px; resize: vertical; }
+.schedule-editor input:focus, .schedule-editor select:focus, .schedule-editor textarea:focus { border-color: #8a6500; box-shadow: 0 0 0 2px rgba(255,180,0,.2); }
+.schedule-editor-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.schedule-editor-actions { display: flex; gap: 6px; margin-top: 18px; }
+.schedule-editor-actions button { height: 39px; border: 1px solid #c6c2b9; background: white; padding: 0 12px; font: 900 7px Arial; letter-spacing: .08em; }
+.schedule-editor-actions .save-job { margin-left: auto; border-color: var(--ink); background: var(--ink); color: var(--amber); }
+.schedule-editor-actions .delete-job, .schedule-editor-actions .delete-confirm { color: #a22e24; }
+.schedule-editor-actions .delete-confirm { border-color: #a22e24; background: #a22e24; color: white; }
+
 /* Credible manual takeoff milestone */
 .credible-takeoff .takeoff-main { grid-template-columns: minmax(520px, 1fr) 430px; }
 .credible-takeoff .annotation-panel { background: #f8f6f0; }
@@ -581,6 +652,9 @@ button { cursor: pointer; }
 @media (max-width: 1200px) {
   .credible-takeoff .takeoff-main { grid-template-columns: minmax(480px, 1fr) 390px; }
   .row-fields { grid-template-columns: repeat(3, 1fr); }
+  .schedule-layout { grid-template-columns: 1fr; }
+  .risk-panel { display: grid; grid-template-columns: repeat(2, 1fr); }
+  .risk-panel > div, .risk-panel > footer { grid-column: 1 / -1; }
 }
 
 /* Founder-only internal workspace */
@@ -695,6 +769,8 @@ button { cursor: pointer; }
   .takeoff-toolbar { grid-column: 1; }
   .estimate-panel { grid-column: 1; grid-row: 3; max-height: none; }
   .workspace-list-view { min-height: 740px; }
+  .schedule-layout { min-width: 840px; }
+  .schedule-view { overflow-x: auto; }
 }
 
 @media (max-width: 600px) {
@@ -774,6 +850,10 @@ button { cursor: pointer; }
   .saved-table-head, .saved-row { min-width: 680px; }
   .customer-cards { grid-template-columns: 1fr; }
   .integration-grid { grid-template-columns: 1fr; }
+  .weather-overview { align-items: flex-start; flex-direction: column; }
+  .schedule-view > header { align-items: flex-start; gap: 14px; }
+  .schedule-layout { min-width: 760px; }
+  .schedule-editor-row { grid-template-columns: 1fr; }
   .integration-intro, .partner-strip { grid-template-columns: 1fr; flex-direction: column; align-items: flex-start; gap: 12px; }
   .integration-research-badge { display: none; }
   .founder-header > div:last-child span { display: none; }

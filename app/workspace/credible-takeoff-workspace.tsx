@@ -147,15 +147,19 @@ export function CredibleTakeoffWorkspace() {
   const [mapStyle, setMapStyle] = useState<"aerial" | "street">("aerial");
   const [imageryInfo, setImageryInfo] = useState({ provider: "esri", detail: "Standard imagery", currentZoom: 18, maxZoom: 19, nativeMaxZoom: 19 as number | null, fallback: false });
   const [message, setMessage] = useState("Search an address, draw the lot, then create a manual takeoff.");
-  const [saved, setSaved] = useState<SavedEstimate[]>(() => {
-    if (typeof window === "undefined") return [];
-    const stored = window.localStorage.getItem("stripepros_demo_estimates");
-    if (!stored) return [];
-    try { return JSON.parse(stored) as SavedEstimate[]; } catch { return []; }
-  });
+  const [saved, setSaved] = useState<SavedEstimate[]>([]);
   const [exporting, setExporting] = useState(false);
 
   annotationsRef.current = annotations;
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const stored = window.localStorage.getItem("stripepros_demo_estimates");
+      if (!stored) return;
+      try { setSaved(JSON.parse(stored) as SavedEstimate[]); } catch { /* ignore invalid device cache */ }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   function setDrawingIntent(intent: DrawIntent) {
     drawingIntentRef.current = intent;

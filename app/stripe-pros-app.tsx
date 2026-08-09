@@ -257,7 +257,7 @@ function HomeScreen({ onAuthenticated }: { onAuthenticated: (user: User) => void
     <main className="home-shell">
       <nav className="home-nav">
         <button className="wordmark wordmark-button" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}><BrandMark /><span>STRIPE PROS</span></button>
-        <div className="home-nav-links"><a href="#how-it-works">How it works</a><a href="/workspace">Live workspace</a><a href="#built-for-stripers">For stripers</a></div>
+        <div className="home-nav-links"><a href="#how-it-works">How it works</a><a href="/workspace">Live workspace</a><a href="#pricing">Pricing</a></div>
         <div className="home-nav-actions"><button className="home-login" onClick={() => setAuthMode("signin")}>Log in</button><button className="home-start" onClick={() => setAuthMode("signup")}>Get started <span>→</span></button></div>
       </nav>
       <section className="home-hero">
@@ -276,7 +276,15 @@ function HomeScreen({ onAuthenticated }: { onAuthenticated: (user: User) => void
           <article><span>03</span><div className="workflow-icon quote-icon">$</div><h3>Send the proposal</h3><p>Your pricing becomes a clean, branded proposal with an annotated site map.</p></article>
         </div>
       </section>
-      <section className="stripers-cta" id="built-for-stripers"><div><p>NO CRM BLOAT. NO GUESSWORK.</p><h2>Made by stripers.<br />For stripers.</h2></div><button onClick={() => setAuthMode("signup")}>BUILD YOUR PRICE BOOK <span>→</span></button></section>
+      <section className="pricing-section" id="pricing">
+        <div className="pricing-heading"><div><p>SIMPLE PRICING. START WITH REAL WORK.</p><h2>Five quotes free.<br /><em>Then grow your way.</em></h2></div><span>Made by stripers. For stripers.</span></div>
+        <div className="pricing-grid">
+          <article className="pricing-card"><span>FREE TRIAL</span><h3>Try it on five jobs.</h3><div className="pricing-price"><strong>$0</strong><small>FIRST 5 QUOTES</small></div><ul><li>Five complete quote previews</li><li>Editable aerial lot takeoffs</li><li>Stall, ADA, and marking counts</li></ul><button onClick={() => setAuthMode("signup")}>START FREE <b>→</b></button></article>
+          <article className="pricing-card starter"><span>STARTER</span><h3>For the owner-operator.</h3><div className="pricing-price"><strong>$25</strong><small>PER MONTH</small></div><ul><li>Unlimited quote creation</li><li>Branded proposal exports</li><li>Saved estimates and price book</li></ul><button onClick={() => setAuthMode("signup")}>CHOOSE STARTER <b>→</b></button></article>
+          <article className="pricing-card scale"><span>SCALE</span><h3>For growing striping crews.</h3><div className="pricing-price"><strong>$100</strong><small>PER MONTH</small></div><ul><li>Everything in Starter</li><li>Team and workflow integrations</li><li>Priority onboarding and support</li></ul><button onClick={() => setAuthMode("signup")}>CHOOSE SCALE <b>→</b></button></article>
+        </div>
+        <p className="pricing-note">No card required for your first five quotes. Cancel a paid plan anytime.</p>
+      </section>
       <footer className="home-footer"><div className="wordmark"><BrandMark /><span>STRIPE PROS</span></div><p>Measurement-assisted quoting for parking lot striping contractors.</p><span>© 2026 STRIPE PROS</span></footer>
       {authMode && <AuthModal onAuthenticated={onAuthenticated} onClose={() => setAuthMode(null)} initialMode={authMode} />}
     </main>

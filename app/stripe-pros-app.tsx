@@ -201,6 +201,7 @@ function HomeScreen({ onAuthenticated }: { onAuthenticated: (user: User) => void
         <h2>Drive less. Quote more.</h2>
         <div className="workflow-grid">
           <article><span>01</span><div className="workflow-icon address-icon">⌖</div><h3>Enter an address</h3><p>Open current aerial imagery for any customer site—right from your office.</p></article>
+          <article><span>02</span><div className="workflow-icon scan-icon">⌗</div><h3>Scan the parking lot</h3><p>Measure stalls, lines, curbs, and markings directly on the aerial map.</p></article>
           <article><span>03</span><div className="workflow-icon quote-icon">$</div><h3>Send the proposal</h3><p>Your pricing becomes a clean, branded proposal with an annotated site map.</p></article>
         </div>
       </section>

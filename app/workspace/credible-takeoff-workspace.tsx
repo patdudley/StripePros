@@ -129,7 +129,7 @@ export function CredibleTakeoffWorkspace() {
   const [boundary, setBoundary] = useState<PolygonGeometry | null>(null);
   const [exclusions, setExclusions] = useState<LotExclusion[]>([]);
   const [selectedExclusionId, setSelectedExclusionId] = useState<string | null>(null);
-  const [exclusionType, setExclusionType] = useState<ExclusionType>("building");
+  const exclusionType: ExclusionType = "building";
   const [annotations, setAnnotations] = useState<TakeoffAnnotation[]>([]);
   const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
   const [drawingIntent, setDrawingIntentState] = useState<DrawIntent>(null);
@@ -536,7 +536,7 @@ export function CredibleTakeoffWorkspace() {
       </div>
       <div className="map-stage">
         <div ref={mapElementRef} className={MAP_CLASS_NAME} data-drawing={Boolean(drawingIntent)} />
-        <div className="map-workflow-strip"><button className={!boundary ? "primary" : ""} onClick={() => startDraw("boundary")}>{boundary ? "REDRAW LOT" : "1 · DRAW LOT"}</button><select aria-label="Exclusion type" value={exclusionType} onChange={(event) => setExclusionType(event.target.value as ExclusionType)}><option value="building">Building</option><option value="landscaping">Landscaping</option><option value="road">Road</option><option value="island">Island</option><option value="neighboring_property">Neighbor property</option></select><button disabled={!boundary} onClick={() => startDraw("exclusion")}>＋ EXCLUSION</button><button disabled={!boundary} onClick={() => setBoundaryEditing((value) => !value)}>{boundaryEditing ? "SAVE BOUNDARY" : "EDIT BOUNDARY"}</button></div>
+        <div className="map-workflow-strip"><button className={!boundary ? "primary" : ""} onClick={() => startDraw("boundary")}>{boundary ? "REDRAW LOT" : "1 · DRAW LOT"}</button><button disabled={!boundary} onClick={() => startDraw("exclusion")}>＋ EXCLUSION</button><button disabled={!boundary} onClick={() => setBoundaryEditing((value) => !value)}>{boundaryEditing ? "SAVE BOUNDARY" : "EDIT BOUNDARY"}</button></div>
         {Boolean(exclusions.length) && <div className="exclusion-list"><strong>EXCLUSIONS</strong>{exclusions.map((exclusion) => <div key={exclusion.id}><button className={selectedExclusionId === exclusion.id ? "selected" : ""} onClick={() => setSelectedExclusionId(exclusion.id)}>{exclusion.type.replaceAll("_", " ")}</button><button aria-label={`Delete ${exclusion.type} exclusion`} onClick={() => { setExclusions((current) => current.filter((item) => item.id !== exclusion.id)); if (selectedExclusionId === exclusion.id) setSelectedExclusionId(null); }}>×</button></div>)}</div>}
         <div className="map-history-tools"><button onClick={undo} disabled={!undoRef.current.length}>↶ UNDO</button><button onClick={redo} disabled={!redoRef.current.length}>↷ REDO</button></div>
         <div className="map-style-switch"><button className={mapStyle === "aerial" ? "active" : ""} onClick={() => void switchMapStyle("aerial")}>SATELLITE</button><button className={mapStyle === "street" ? "active" : ""} onClick={() => void switchMapStyle("street")}>STREET</button></div>

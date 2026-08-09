@@ -530,7 +530,7 @@ button { cursor: pointer; }
 .credible-takeoff .takeoff-main { grid-template-columns: minmax(520px, 1fr) 430px; }
 .credible-takeoff .annotation-panel { background: #f8f6f0; }
 .map-workflow-strip { position: absolute; z-index: 850; top: 13px; left: 13px; display: flex; box-shadow: 0 5px 18px rgba(0,0,0,.27); }
-.map-workflow-strip button, .map-workflow-strip select { height: 38px; border: 0; border-right: 1px solid #d3cfc5; background: rgba(255,255,255,.96); color: var(--ink); padding: 0 10px; font: 900 7px Arial; letter-spacing: .07em; }
+.map-workflow-strip button { height: 38px; border: 0; border-right: 1px solid #d3cfc5; background: rgba(255,255,255,.96); color: var(--ink); padding: 0 10px; font: 900 7px Arial; letter-spacing: .07em; }
 .map-workflow-strip button.primary { background: var(--amber); }
 .map-workflow-strip button:disabled { color: #aaa69d; cursor: not-allowed; }
 .credible-takeoff .map-style-switch { top: 60px; left: 13px; }

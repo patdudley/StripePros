@@ -370,7 +370,7 @@ function ProductDemo() {
           <div className={`demo-address-found ${selectedSite ? "matched" : ""}`}><span>{selectedSite ? "PROPERTY MATCH" : "LIVE ADDRESS DEMO"}</span><strong>{propertyName}</strong><small>{propertyLocation}</small></div>
         </div>
           <div className={`lot-canvas demo-stage-block ${phase} ${boundaryEditing || selectingLot ? "editing" : ""}`}>
-            <div ref={demoMapElementRef} className={`demo-real-map ${boundaryEditing || selectingLot ? "editing" : ""}`} aria-label={`Aerial imagery of ${propertyName}`} />
+            <div ref={demoMapElementRef} className="demo-real-map" aria-label={`Aerial imagery of ${propertyName}`} />
             <div className="demo-step-label demo-map-label"><b>02</b><span>SELECT THE PARKING LOT</span></div>
             {phase === "selecting" && <div className="lot-selection-guide"><strong>DRAW THE LOT BOUNDARY</strong><span>Click each corner around the parking area, then click the first point again to finish.</span></div>}
             {phase === "scanning" && <div className="scan-line"><span>MEASURING SITE</span></div>}

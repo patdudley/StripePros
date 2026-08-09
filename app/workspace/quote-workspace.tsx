@@ -104,10 +104,13 @@ const SAN_DIEGO_LOT = {
   center: [32.7849, -117.1258] as [number, number],
 };
 
+const ESRI_IMAGERY_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+
 export function QuoteWorkspace() {
   const mapElementRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const baseLayerRef = useRef<TileLayer | null>(null);
+  const imagerySignatureRef = useRef(`esri:${ESRI_IMAGERY_URL}:19`);
   const labelLayerRef = useRef<TileLayer | null>(null);
   const imageryMaxZoomRef = useRef(19);
   const layerByMeasurementRef = useRef(new Map<string, LeafletLayer>());
@@ -166,7 +169,7 @@ export function QuoteWorkspace() {
       mapRef.current = map;
       L.control.zoom({ position: "bottomright" }).addTo(map);
 
-      baseLayerRef.current = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+      baseLayerRef.current = L.tileLayer(ESRI_IMAGERY_URL, {
         maxZoom: 19,
         maxNativeZoom: 19,
         crossOrigin: "anonymous",
@@ -246,19 +249,23 @@ export function QuoteWorkspace() {
       const response = await fetch(`/api/map-config${query}`);
       if (!response.ok) return;
       const config = await response.json() as MapImageryConfig;
-      const nextLayer = L.tileLayer(config.tileUrl, {
-        maxZoom: config.maxZoom,
-        maxNativeZoom: config.maxZoom,
-        crossOrigin: "anonymous",
-        attribution: config.provider === "nearmap" ? "Aerial imagery © Nearmap" : config.provider === "mapbox" ? "Imagery © Mapbox" : "Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community",
-      }) as TileLayer;
-      const loaded = await activateTileLayer(map, nextLayer, baseLayerRef.current);
-      if (!loaded) {
-        imageryMaxZoomRef.current = 19;
-        setImageryInfo({ provider: "esri", label: "ESRI STANDARD AERIAL", detail: `${config.provider === "mapbox" ? "MAPBOX" : "HD SERVICE"} UNAVAILABLE`, maxZoom: 19 });
-        return;
+      const signature = `${config.provider}:${config.tileUrl}:${config.maxZoom}`;
+      if (signature !== imagerySignatureRef.current) {
+        const nextLayer = L.tileLayer(config.tileUrl, {
+          maxZoom: config.maxZoom,
+          maxNativeZoom: config.maxZoom,
+          crossOrigin: "anonymous",
+          attribution: config.provider === "nearmap" ? "Aerial imagery © Nearmap" : config.provider === "mapbox" ? "Imagery © Mapbox" : "Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+        }) as TileLayer;
+        const loaded = await activateTileLayer(map, nextLayer, baseLayerRef.current);
+        if (!loaded) {
+          imageryMaxZoomRef.current = 19;
+          setImageryInfo({ provider: "esri", label: "ESRI STANDARD AERIAL", detail: `${config.provider === "mapbox" ? "MAPBOX" : "HD SERVICE"} UNAVAILABLE`, maxZoom: 19 });
+          return;
+        }
+        baseLayerRef.current = nextLayer;
+        imagerySignatureRef.current = signature;
       }
-      baseLayerRef.current = nextLayer;
       imageryMaxZoomRef.current = config.maxZoom;
       if (labelLayerRef.current) {
         if (config.provider !== "esri" && map.hasLayer(labelLayerRef.current)) map.removeLayer(labelLayerRef.current);

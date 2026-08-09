@@ -32,6 +32,8 @@ type PriceItem = {
   sortOrder: number;
 };
 
+const ESRI_IMAGERY_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+
 async function api<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, { ...options, headers: { "Content-Type": "application/json", ...options?.headers } });
   const body = await response.json() as T & { error?: string };
@@ -89,6 +91,7 @@ function ProductDemo() {
   const demoMapRef = useRef<LeafletMap | null>(null);
   const demoLeafletRef = useRef<typeof import("leaflet") | null>(null);
   const demoTileLayerRef = useRef<TileLayer | null>(null);
+  const demoImagerySignatureRef = useRef(`esri:${ESRI_IMAGERY_URL}:19`);
   const demoBoundaryRef = useRef<DemoBoundary | null>(null);
   const demoScanZoomRef = useRef(19);
   const [phase, setPhase] = useState<"typing" | "selecting" | "scanning" | "quote">("typing");
@@ -118,7 +121,7 @@ function ProductDemo() {
       await import("@geoman-io/leaflet-geoman-free");
       map = L.map(demoMapElementRef.current, { center: [32.7849, -117.1258], zoom: 18, zoomControl: false, attributionControl: true, dragging: false, scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false, touchZoom: false });
       demoMapRef.current = map;
-      demoTileLayerRef.current = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19, maxNativeZoom: 19, crossOrigin: "anonymous", attribution: "Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community" }).addTo(map);
+      demoTileLayerRef.current = L.tileLayer(ESRI_IMAGERY_URL, { maxZoom: 19, maxNativeZoom: 19, crossOrigin: "anonymous", attribution: "Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community" }).addTo(map);
       map.on("pm:create", (rawEvent) => {
         const event = rawEvent as unknown as { shape: string; layer: DemoBoundary };
         if (event.shape !== "Polygon") return;
@@ -151,19 +154,23 @@ function ProductDemo() {
       const response = await fetch(`/api/map-config${query}`);
       if (!response.ok) return;
       const config = await response.json() as MapImageryConfig;
-      const nextLayer = L.tileLayer(config.tileUrl, {
-        maxZoom: config.maxZoom,
-        maxNativeZoom: config.maxZoom,
-        crossOrigin: "anonymous",
-        attribution: config.provider === "nearmap" ? "Aerial imagery © Nearmap" : config.provider === "mapbox" ? "Imagery © Mapbox" : "Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community",
-      }) as TileLayer;
-      const loaded = await activateTileLayer(map, nextLayer, demoTileLayerRef.current);
-      if (!loaded) {
-        demoScanZoomRef.current = 19;
-        setImageryDetail(`${config.provider === "mapbox" ? "MAPBOX" : "HD IMAGERY"} UNAVAILABLE · STANDARD AERIAL`);
-        return;
+      const signature = `${config.provider}:${config.tileUrl}:${config.maxZoom}`;
+      if (signature !== demoImagerySignatureRef.current) {
+        const nextLayer = L.tileLayer(config.tileUrl, {
+          maxZoom: config.maxZoom,
+          maxNativeZoom: config.maxZoom,
+          crossOrigin: "anonymous",
+          attribution: config.provider === "nearmap" ? "Aerial imagery © Nearmap" : config.provider === "mapbox" ? "Imagery © Mapbox" : "Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+        }) as TileLayer;
+        const loaded = await activateTileLayer(map, nextLayer, demoTileLayerRef.current);
+        if (!loaded) {
+          demoScanZoomRef.current = 19;
+          setImageryDetail(`${config.provider === "mapbox" ? "MAPBOX" : "HD IMAGERY"} UNAVAILABLE · STANDARD AERIAL`);
+          return;
+        }
+        demoTileLayerRef.current = nextLayer;
+        demoImagerySignatureRef.current = signature;
       }
-      demoTileLayerRef.current = nextLayer;
       demoScanZoomRef.current = config.maxZoom;
       if (config.provider === "mapbox") {
         setImageryDetail("MAPBOX SATELLITE · HIGH-DPI AERIAL");

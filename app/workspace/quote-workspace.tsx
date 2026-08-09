@@ -32,6 +32,7 @@ type SavedEstimate = { id: string; address: string; total: number; measurements:
 type IntegrationStatus = { jobber: boolean; quickbooks: boolean; hubspot: boolean; webhook: boolean };
 type DrawLayer = LeafletLayer & { toGeoJSON(): Parameters<typeof turfArea>[0] };
 type DrawMode = "Polygon" | "Line" | "Marker";
+type ScanState = "idle" | "ready" | "active";
 type GeomanMap = LeafletMap & { pm: { enableDraw(shape: DrawMode, options?: Record<string, unknown>): void; disableDraw(): void } };
 
 const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
@@ -96,6 +97,8 @@ export function QuoteWorkspace({ nearMapEnabled }: { nearMapEnabled: boolean }) 
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [results, setResults] = useState<GeocodeResult[]>([]);
+  const [selectedSite, setSelectedSite] = useState<GeocodeResult | null>(null);
+  const [scanState, setScanState] = useState<ScanState>("idle");
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
   const [standardStalls, setStandardStalls] = useState(84);
   const [adaStalls, setAdaStalls] = useState(2);
@@ -104,13 +107,17 @@ export function QuoteWorkspace({ nearMapEnabled }: { nearMapEnabled: boolean }) 
   const [material, setMaterial] = useState<"paint" | "thermoplastic">("paint");
   const [exporting, setExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState("");
-  const [saved, setSaved] = useState<SavedEstimate[]>(() => {
-    if (typeof window === "undefined") return [];
-    const stored = window.localStorage.getItem("stripepros_demo_estimates");
-    if (!stored) return [];
-    try { return JSON.parse(stored) as SavedEstimate[]; } catch { return []; }
-  });
+  const [saved, setSaved] = useState<SavedEstimate[]>([]);
   const [prices, setPrices] = useState({ stalls: 5, ada: 35, arrows: 15, stopBars: 3, curb: 1.75, sealcoat: 0.16, mobilization: 250 });
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem("stripepros_demo_estimates");
+    if (!stored) return;
+    const loadSaved = window.setTimeout(() => {
+      try { setSaved(JSON.parse(stored) as SavedEstimate[]); } catch { /* ignore invalid local demo state */ }
+    }, 0);
+    return () => window.clearTimeout(loadSaved);
+  }, []);
 
   useEffect(() => {
     if (!mapElementRef.current || mapRef.current) return;
@@ -195,6 +202,9 @@ export function QuoteWorkspace({ nearMapEnabled }: { nearMapEnabled: boolean }) 
     curb: measurements.filter((item) => item.linkedItem === "curb").reduce((sum, item) => sum + item.value, 0),
     sealcoat: measurements.filter((item) => item.linkedItem === "sealcoat").reduce((sum, item) => sum + item.value, 0),
   }), [measurements]);
+  const hasVerifiedScope = Boolean(
+    mapCounts.stalls || mapCounts.curb || mapCounts.sealcoat || standardStalls || adaStalls || arrows || stopBars,
+  );
 
   const quoteItems = useMemo<QuoteItem[]>(() => [
     { id: "stalls", name: "Standard stalls — restripe", category: "Striping", unit: "each", quantity: mapCounts.stalls || standardStalls, unitPrice: prices.stalls },
@@ -203,8 +213,8 @@ export function QuoteWorkspace({ nearMapEnabled }: { nearMapEnabled: boolean }) 
     { id: "stopBars", name: "Stop bars", category: "Striping", unit: "LF", quantity: stopBars * 12, unitPrice: prices.stopBars },
     { id: "curb", name: "Curb paint", category: "Striping", unit: "LF", quantity: mapCounts.curb, unitPrice: prices.curb },
     { id: "sealcoat", name: "Sealcoat — single coat", category: "Surface", unit: "sqft", quantity: mapCounts.sealcoat, unitPrice: prices.sealcoat },
-    { id: "mobilization", name: "Mobilization", category: "Job", unit: "flat", quantity: 1, unitPrice: prices.mobilization },
-  ].filter((item) => item.quantity > 0), [adaStalls, arrows, mapCounts, prices, standardStalls, stopBars]);
+    { id: "mobilization", name: "Mobilization", category: "Job", unit: "flat", quantity: hasVerifiedScope ? 1 : 0, unitPrice: prices.mobilization },
+  ].filter((item) => item.quantity > 0), [adaStalls, arrows, hasVerifiedScope, mapCounts, prices, standardStalls, stopBars]);
 
   const materialMultiplier = material === "thermoplastic" ? 2.8 : 1;
   const calculation = useMemo(() => calculateQuote(quoteItems, materialMultiplier, 450), [materialMultiplier, quoteItems]);
@@ -227,10 +237,35 @@ export function QuoteWorkspace({ nearMapEnabled }: { nearMapEnabled: boolean }) 
   }
 
   function selectAddress(result: GeocodeResult) {
+    const isDemoSite = result.label.includes("2101 Stadium Way");
     setAddress(result.label);
     setSiteAddress(result.label);
+    setSelectedSite(result);
+    setScanState("ready");
     setResults([]);
+    if (!isDemoSite) {
+      layerByMeasurementRef.current.forEach((layer) => mapRef.current?.removeLayer(layer));
+      layerByMeasurementRef.current.clear();
+      setMeasurements([]);
+      setStandardStalls(0);
+      setAdaStalls(0);
+      setArrows(0);
+      setStopBars(0);
+      setExportMessage("New site loaded. Verify the work boundary and count the lot before generating a proposal.");
+    }
     mapRef.current?.flyTo([result.lat, result.lng], 18, { duration: 1.2 });
+  }
+
+  function beginLotScan() {
+    if (!selectedSite) return;
+    setScanState("active");
+    setExportMessage("Scan mode started. Outline the parking lot boundary, then count stalls and mark ADA spaces.");
+    mapRef.current?.flyTo([selectedSite.lat, selectedSite.lng], 19, { duration: .8 });
+    const map = mapRef.current as GeomanMap | null;
+    if (!map) return;
+    map.pm.disableDraw();
+    map.pm.enableDraw("Polygon", { snappable: true, continueDrawing: false });
+    setDrawMode("Polygon");
   }
 
   function startDrawing(mode: DrawMode) {
@@ -278,6 +313,10 @@ export function QuoteWorkspace({ nearMapEnabled }: { nearMapEnabled: boolean }) 
   }
 
   function saveEstimate() {
+    if (!hasVerifiedScope) {
+      setExportMessage("Count or measure the selected lot before saving an estimate.");
+      return;
+    }
     const estimate: SavedEstimate = {
       id: crypto.randomUUID(),
       address: siteAddress,
@@ -292,6 +331,10 @@ export function QuoteWorkspace({ nearMapEnabled }: { nearMapEnabled: boolean }) 
   }
 
   async function exportProposal() {
+    if (!hasVerifiedScope) {
+      setExportMessage("Count or measure the selected lot before generating a proposal.");
+      return;
+    }
     setExporting(true);
     setExportMessage("");
     let mapIncluded = true;
@@ -369,7 +412,7 @@ export function QuoteWorkspace({ nearMapEnabled }: { nearMapEnabled: boolean }) 
       <header className="quote-app-header">
         <Link className="quote-brand" href="/"><BrandMark /><span>STRIPE PROS</span></Link>
         <div className="quote-header-site"><span>ESTIMATE</span><strong>San Diego Stadium Operations</strong><small>{siteAddress}</small></div>
-        <div className="quote-header-actions"><span className="autosave-status"><i /> LOCAL DEMO</span><button onClick={saveEstimate}>SAVE DRAFT</button><button className="export-button" onClick={exportProposal} disabled={exporting}>{exporting ? "GENERATING…" : "EXPORT PROPOSAL"} <b>→</b></button></div>
+        <div className="quote-header-actions"><span className="autosave-status"><i /> LOCAL DEMO</span><button onClick={saveEstimate} disabled={!hasVerifiedScope}>SAVE DRAFT</button><button className="export-button" onClick={exportProposal} disabled={exporting || !hasVerifiedScope}>{exporting ? "GENERATING…" : "EXPORT PROPOSAL"} <b>→</b></button></div>
       </header>
       <aside className="quote-sidebar">
         <p>WORKSPACE</p>
@@ -383,17 +426,22 @@ export function QuoteWorkspace({ nearMapEnabled }: { nearMapEnabled: boolean }) 
 
       {view === "takeoff" && <section className="takeoff-main">
         <div className="takeoff-toolbar">
-          <form onSubmit={searchAddress} className="workspace-address-search"><span>⌕</span><input value={address} onChange={(event) => setAddress(event.target.value)} aria-label="Property address" /><button disabled={searching}>{searching ? "SEARCHING…" : "FIND LOT"}</button></form>
+          <form onSubmit={searchAddress} className="workspace-address-search"><span>⌕</span><input value={address} onChange={(event) => { setAddress(event.target.value); setScanState("idle"); setSelectedSite(null); }} aria-label="Property address" /><button disabled={searching}>{searching ? "SEARCHING…" : "FIND LOT"}</button></form>
           <div className="imagery-chip"><i /> {nearMapEnabled ? "NEARMAP VERTICAL" : "ESRI HYBRID AERIAL"} <span>{nearMapEnabled ? "MEASUREMENT IMAGERY" : "LIVE DEMO · NEARMAP READY"}</span></div>
           {results.length > 1 && <div className="address-results">{results.map((result) => <button key={`${result.lat}-${result.lng}`} onClick={() => selectAddress(result)}>{result.label}</button>)}</div>}
           {searchError && <p className="workspace-error">{searchError}</p>}
         </div>
         <div className="map-stage">
           <div ref={mapElementRef} className="live-map" />
+          {scanState !== "idle" && <div className={`scan-lot-cta ${scanState === "active" ? "active" : ""}`} role="status">
+            <span>{scanState === "ready" ? "ADDRESS FOUND" : "SCAN MODE"}</span>
+            <div><strong>{scanState === "ready" ? "Ready to scan this parking lot" : "Outline the parking lot boundary"}</strong><small>{scanState === "ready" ? "Confirm the site, then start the guided takeoff." : "Click each corner of the work area and close the shape."}</small></div>
+            {scanState === "ready" ? <button onClick={beginLotScan}>SCAN THIS LOT <b>→</b></button> : <button onClick={() => startDrawing("Marker")}>COUNT STALLS <b>＋</b></button>}
+          </div>}
           <div className="map-style-switch" aria-label="Map style"><button className={mapStyle === "aerial" ? "active" : ""} onClick={() => void switchMapStyle("aerial")}>SATELLITE</button><button className={mapStyle === "street" ? "active" : ""} onClick={() => void switchMapStyle("street")}>STREET</button></div>
           <div className="map-draw-tools" aria-label="Map measurement tools"><button className={drawMode === "Polygon" ? "active" : ""} onClick={() => startDrawing("Polygon")}>▰ AREA</button><button className={drawMode === "Line" ? "active" : ""} onClick={() => startDrawing("Line")}>╱ LENGTH</button><button className={drawMode === "Marker" ? "active" : ""} onClick={() => startDrawing("Marker")}>• COUNT</button></div>
           <div className="map-instructions"><strong>DRAW THE TAKEOFF</strong><span>Polygon = paved area</span><span>Line = curb footage</span><span>Marker = parking stall</span></div>
-          <div className="assist-banner"><span>SMART DETECTION</span><strong>Connector ready for a future vision service</strong><small>Manual tools are live and editable today.</small></div>
+          {scanState === "idle" && <div className="assist-banner"><span>SMART DETECTION</span><strong>Search an address to scan a parking lot</strong><small>Manual takeoff tools are live and editable today.</small></div>}
         </div>
         <aside className="estimate-panel">
           <div className="estimate-panel-head"><div><p>LIVE ESTIMATE</p><h1>{currency.format(calculation.total)}</h1></div><span>{quoteItems.length} ITEMS</span></div>

@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "predictions": [
+    {
+      "recordId": "737-pearl",
+      "status": "counted",
+      "standardStalls": 25,
+      "adaStalls": 1,
+      "confidence": 0.72,
+      "blind": false,
+      "notes": "Calibration pass after the quote label was already visible; never use this as holdout accuracy."
+    },
+    {
+      "recordId": "3105-el-cajon",
+      "status": "counted",
+      "standardStalls": 44,
+      "adaStalls": 2,
+      "confidence": 0.64,
+      "blind": false,
+      "notes": "Calibration pass; buildings, vehicles, and neighboring access make the lot boundary non-trivial."
+    },
+    {
+      "recordId": "3245-el-cajon",
+      "status": "counted",
+      "totalStalls": 65,
+      "adaStalls": 2,
+      "confidence": 0.82,
+      "blind": false,
+      "notes": "Calibration pass on the former Pancho Villa site."
+    },
+    {
+      "recordId": "7555-pacific",
+      "status": "counted",
+      "standardStalls": 50,
+      "adaStalls": 1,
+      "confidence": 0.69,
+      "blind": false,
+      "notes": "Calibration pass; apartment property boundary was confirmed before row counting."
+    },
+    {
+      "recordId": "13950-milton",
+      "status": "needs_boundary",
+      "confidence": 0.25,
+      "blind": false,
+      "notes": "The address point and aerial context do not unambiguously identify which neighboring parking fields were included."
+    },
+    {
+      "recordId": "current-google-building-41",
+      "status": "needs_boundary",
+      "confidence": 0.96,
+      "blind": true,
+      "notes": "The address resolves to an office building, not one isolated parking lot. Reject the inherited 84/2 demo defaults."
+    }
+  ]
+}

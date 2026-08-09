@@ -1,0 +1,234 @@
+{
+  "version": 1,
+  "createdAt": "2026-08-08",
+  "records": [
+    {
+      "id": "400-s-sierra",
+      "address": "400 S Sierra Ave, Solana Beach, CA 92075",
+      "sourceFiles": ["400 S Sierra Ave. Solana Beach, CA, 92075.docx"],
+      "quoteDate": "2024-07-18",
+      "proposalTotal": 1000,
+      "scopeType": "whole_lot_unspecified",
+      "labels": { "striping": true },
+      "eligibleForWholeLotEvaluation": false,
+      "notes": "No quantities were written into the proposal."
+    },
+    {
+      "id": "725-n-quince",
+      "address": "725 N Quince St, Escondido, CA 92025",
+      "sourceFiles": ["725 N Quince st, escondido 92025.docx"],
+      "quoteDate": "2024-06-26",
+      "proposalTotal": 2000,
+      "scopeType": "whole_lot_unspecified",
+      "labels": { "striping": true, "sealcoating": true },
+      "eligibleForWholeLotEvaluation": false,
+      "notes": "No quantities were written into the proposal."
+    },
+    {
+      "id": "737-pearl",
+      "address": "737 Pearl St, La Jolla, CA 92037",
+      "sourceFiles": ["737 Pearl St, La Jolla, CA 92037.docx"],
+      "quoteDate": "2024-09-21",
+      "proposalTotal": 750,
+      "scopeType": "whole_lot_restripe",
+      "labels": { "standardStalls": 25, "adaStalls": 1, "wheelStopsRepaint": true },
+      "eligibleForWholeLotEvaluation": true,
+      "notes": "The source says approximately 25 single-line stalls plus one ADA stall."
+    },
+    {
+      "id": "777-s-highway-101",
+      "address": "777 S Highway 101, Solana Beach, CA 92075",
+      "sourceFiles": ["777 S Highway 101, Solana Beach, CA 92075.docx"],
+      "quoteDate": "2024-07-18",
+      "proposalTotal": 1600,
+      "scopeType": "whole_lot_unspecified",
+      "labels": { "striping": true },
+      "eligibleForWholeLotEvaluation": false,
+      "notes": "No quantities were written into the proposal."
+    },
+    {
+      "id": "853-turquoise",
+      "address": "853 Turquoise St, San Diego, CA 92109",
+      "sourceFiles": [
+        "853 Turquoise St, San Diego CA, 92109.docx",
+        "853 Turquoise St, San Diego CA, 92109 (1).docx"
+      ],
+      "quoteDate": "2024-09-22",
+      "proposalTotal": 500,
+      "scopeType": "whole_lot_restripe",
+      "labels": { "adaStalls": 1 },
+      "eligibleForWholeLotEvaluation": false,
+      "notes": "Duplicate proposal copies. Regular stall quantity is not stated."
+    },
+    {
+      "id": "1155-e-grand",
+      "address": "1155 E Grand Ave, Escondido, CA 92025",
+      "sourceFiles": ["1155 E Grand Avenue, escondido 92025.docx"],
+      "quoteDate": "2024-06-26",
+      "proposalTotal": 2000,
+      "scopeType": "whole_lot_unspecified",
+      "labels": { "striping": true, "sealcoating": true },
+      "eligibleForWholeLotEvaluation": false,
+      "notes": "No quantities were written into the proposal."
+    },
+    {
+      "id": "3105-el-cajon",
+      "address": "3105 El Cajon Blvd, San Diego, CA 92104",
+      "sourceFiles": ["3105 El Cajon Blvd, San Diego, CA 92104.docx"],
+      "quoteDate": "2024-09-09",
+      "proposalTotal": 750,
+      "scopeType": "whole_lot_restripe",
+      "labels": { "standardStalls": 44, "adaStalls": 2, "pathsOfTravel": 2 },
+      "eligibleForWholeLotEvaluation": true,
+      "notes": "O'Reilly Auto Parts store #3855."
+    },
+    {
+      "id": "3245-el-cajon",
+      "address": "3245 El Cajon Blvd, San Diego, CA 92104",
+      "sourceFiles": ["3245 El Cajon Blvd, San Diego, CA 92104.docx"],
+      "quoteDate": "2024-09-23",
+      "proposalTotal": 1300,
+      "scopeType": "whole_lot_restripe",
+      "labels": {
+        "totalStalls": 65,
+        "adaStalls": 2,
+        "directionalPaths": 4,
+        "largePathsOfTravel": 3,
+        "speedBumps": 2,
+        "fireLanes": 1
+      },
+      "eligibleForWholeLotEvaluation": true,
+      "notes": "The proposal says 65 spots total; ADA may be included in that total."
+    },
+    {
+      "id": "7555-pacific",
+      "address": "7555 Pacific Ave, Lemon Grove, CA 91945",
+      "sourceFiles": ["7555 Pacific Ave Lemon Grove, CA  91945.docx"],
+      "quoteDate": "2024-09-11",
+      "proposalTotal": 900,
+      "scopeType": "whole_lot_restripe",
+      "labels": {
+        "standardStalls": 50,
+        "adaStalls": 1,
+        "speedBumps": 1,
+        "speedMarkings": 4,
+        "reservedMarkings": 2,
+        "fireLanes": 1,
+        "pathsOfTravel": 1
+      },
+      "eligibleForWholeLotEvaluation": true,
+      "notes": "The source calls the 50 stalls numbered and lists the ADA stall separately."
+    },
+    {
+      "id": "10605-jamacha",
+      "address": "10605 Jamacha Blvd, Spring Valley, CA 91978",
+      "sourceFiles": [
+        "10605 Jamacha Blvd, Spring Valley, CA 91978.docx",
+        "10605 Jamacha Blvd, Spring Valley, CA 91978 (1).docx"
+      ],
+      "quoteDate": "2024-09-28",
+      "proposalTotal": 1350,
+      "scopeType": "partial_ada_correction",
+      "labels": { "adaStalls": 2, "wheelStops": 2, "signPosts": 1, "mountedSigns": 2 },
+      "eligibleForWholeLotEvaluation": false,
+      "notes": "Duplicate proposal copies. This is not a full-lot restripe."
+    },
+    {
+      "id": "13950-milton",
+      "address": "13950 Milton Ave, Westminster, CA 92683",
+      "sourceFiles": [
+        "13950 Milton Ave Westminister, CA 92683.docx",
+        "Copy of 13950 Milton Ave Westminister, CA 92683.docx"
+      ],
+      "quoteDate": "2024-10-14",
+      "proposalTotal": 1500,
+      "scopeType": "whole_lot_restripe",
+      "labels": {
+        "standardStalls": 92,
+        "adaStalls": 5,
+        "pathsOfTravel": 1,
+        "reservedMarkings": 3,
+        "rpmgMarkings": 3,
+        "lineStyle": "double_white_square_end"
+      },
+      "eligibleForWholeLotEvaluation": true,
+      "notes": "Two revisions have the same scope and total but different dates. Site boundary remains visually ambiguous from the address pin alone."
+    },
+    {
+      "id": "38990-midway",
+      "address": "38990 Midway Ave, San Diego, CA 92140",
+      "sourceFiles": ["38990 Midway Ave, San Diego, CA 92140.docx"],
+      "quoteDate": "2024-10-28",
+      "proposalTotal": 8550,
+      "scopeType": "partial_marking_package",
+      "labels": {
+        "standardLineCount": 106,
+        "adaStalls": 5,
+        "ambulanceMarkings": 3,
+        "arrows": 16,
+        "paintedStopPackages": 3,
+        "stopBars": 9,
+        "doNotEnterMarkings": 3,
+        "thermoplasticStopPackages": 7,
+        "wheelStops": 8,
+        "signPosts": 9
+      },
+      "eligibleForWholeLotEvaluation": false,
+      "notes": "The quantity 106 is painted 4x18-foot lines, not parking stalls."
+    },
+    {
+      "id": "4595-mission-bay",
+      "address": "4595 Mission Bay Dr, San Diego, CA 92109",
+      "sourceFiles": ["Prime Storage_ 4595 Mission Bay Dr. San Diego, CA 92109.docx"],
+      "quoteDate": "2025-07-16",
+      "proposalTotal": 1300,
+      "scopeType": "partial_marking_package",
+      "labels": { "standardStalls": 4, "speedMarkings": 4, "speedBumps": 1, "centerLines": 1, "curbRuns": 2 },
+      "eligibleForWholeLotEvaluation": false,
+      "notes": "The site is much larger than four stalls; the quote covers a limited scope."
+    },
+    {
+      "id": "4124-university-striping",
+      "address": "4124 University Ave, San Diego, CA 92105",
+      "sourceFiles": ["Striping (no sealcoating) - 4124 University Ave, San Diego, CA 92105.docx"],
+      "quoteDate": "2024-06-26",
+      "proposalTotal": 700,
+      "scopeType": "whole_lot_unspecified",
+      "labels": { "striping": true },
+      "eligibleForWholeLotEvaluation": false,
+      "notes": "No quantities were written into the proposal."
+    },
+    {
+      "id": "4124-university-sealcoat",
+      "address": "4124 University Ave, San Diego, CA 92105",
+      "sourceFiles": ["Striping + Sealcoating - 4124 University Ave, San Diego, CA 92105.docx"],
+      "quoteDate": "2024-06-26",
+      "proposalTotal": 2400,
+      "scopeType": "whole_lot_unspecified",
+      "labels": { "striping": true, "sealcoating": true },
+      "eligibleForWholeLotEvaluation": false,
+      "notes": "Alternative scope for the same address; no quantities were written into the proposal."
+    },
+    {
+      "id": "precision-8409",
+      "address": null,
+      "sourceFiles": ["Est_8409_from_Precision_Striping_Inc_44520.docx"],
+      "quoteDate": "2024-06-18",
+      "proposalTotal": 1500,
+      "scopeType": "sports_court_not_parking",
+      "labels": { "halfBasketballCourts": 1, "halfPickleballCourts": 1 },
+      "eligibleForWholeLotEvaluation": false,
+      "notes": "Excluded from parking-lot counting."
+    }
+  ],
+  "holdouts": [
+    {
+      "id": "current-google-building-41",
+      "address": "1600 Amphitheatre Pkwy, Mountain View, CA 94043",
+      "sourceFiles": ["Stripe-Pros-Proposal-2026-08-08.pdf"],
+      "labels": null,
+      "expectedDisposition": "needs_scope_boundary",
+      "notes": "The geocoded rooftop point is Building 41 and does not identify a single parking lot. The generated 84/2 quantities are inherited demo defaults and are not ground truth."
+    }
+  ]
+}

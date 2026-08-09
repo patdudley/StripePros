@@ -326,6 +326,16 @@ button { cursor: pointer; }
 .map-style-switch { position: absolute; z-index: 800; top: 13px; left: 229px; display: flex; padding: 3px; border: 1px solid rgba(255,255,255,.25); border-radius: 5px; background: rgba(17,17,15,.88); box-shadow: 0 4px 15px rgba(0,0,0,.2); }
 .map-style-switch button { height: 28px; border: 0; border-radius: 3px; background: transparent; color: #d2cfc7; padding: 0 10px; font: 900 7px Arial; letter-spacing: .08em; }
 .map-style-switch button.active { background: #fff; color: var(--ink); }
+.scan-lot-cta { position: absolute; z-index: 900; top: 64px; left: 50%; width: min(650px, calc(100% - 36px)); min-height: 66px; transform: translateX(-50%); display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: stretch; border: 1px solid var(--ink); background: rgba(255,255,255,.97); box-shadow: 0 14px 34px rgba(0,0,0,.28); backdrop-filter: blur(7px); }
+.scan-lot-cta > span { display: grid; place-items: center; padding: 0 13px; background: var(--amber); color: var(--ink); font: 900 7px monospace; letter-spacing: .1em; writing-mode: vertical-rl; transform: rotate(180deg); }
+.scan-lot-cta > div { min-width: 0; display: grid; align-content: center; gap: 4px; padding: 10px 15px; }
+.scan-lot-cta strong { font-size: 13px; letter-spacing: -.02em; }
+.scan-lot-cta small { color: #6f6c65; font-size: 8px; }
+.scan-lot-cta button { min-width: 151px; border: 0; background: var(--ink); color: var(--amber); padding: 0 16px; font: 900 8px Arial; letter-spacing: .08em; }
+.scan-lot-cta button b { margin-left: 8px; font-size: 13px; }
+.scan-lot-cta.active { border-color: var(--amber); background: rgba(17,17,15,.95); color: #fff; }
+.scan-lot-cta.active small { color: #aaa79e; }
+.scan-lot-cta.active button { background: var(--amber); color: var(--ink); }
 .site-pin { position: relative; }
 .site-pin::before { content: ""; position: absolute; left: 3px; top: 1px; width: 24px; height: 24px; transform: rotate(45deg); border: 3px solid #fff; border-radius: 50% 50% 50% 0; background: var(--amber); box-shadow: 0 3px 9px rgba(0,0,0,.42); }
 .site-pin span { position: absolute; z-index: 1; left: 11px; top: 9px; width: 8px; height: 8px; border-radius: 50%; background: var(--ink); }
@@ -615,6 +625,10 @@ button { cursor: pointer; }
   .workspace-address-search { min-height: 42px; flex: none; width: 100%; }
   .map-instructions { display: none; }
   .map-style-switch { top: 59px; left: 13px; }
+  .scan-lot-cta { top: 108px; width: calc(100% - 26px); grid-template-columns: 1fr auto; }
+  .scan-lot-cta > span { display: none; }
+  .scan-lot-cta > div { padding: 10px 12px; }
+  .scan-lot-cta button { min-width: 125px; padding: 0 10px; font-size: 7px; }
   .assist-banner { bottom: 14px; }
   .manual-counts { grid-template-columns: 1fr; }
   .manual-counts .panel-section-title { grid-column: 1; }

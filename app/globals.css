@@ -539,9 +539,6 @@ button { cursor: pointer; }
 .exclusion-list button { min-width: 0; height: 23px; border: 1px solid #57544d; background: #2c2b27; color: #ddd9d0; padding: 0 5px; overflow: hidden; text-align: left; text-overflow: ellipsis; font-size: 6px; font-weight: 800; text-transform: uppercase; white-space: nowrap; }
 .exclusion-list button:last-child { text-align: center; }
 .exclusion-list button.selected { border-color: var(--amber); color: var(--amber); }
-.imagery-diagnostic { position: absolute; z-index: 820; right: 13px; bottom: 51px; width: 164px; background: rgba(17,17,15,.9); color: #ddd9d0; padding: 8px 10px; font: 700 6px monospace; }
-.imagery-diagnostic summary { cursor: pointer; color: var(--amber); font-weight: 900; letter-spacing: .09em; }
-.imagery-diagnostic span { display: block; margin-top: 4px; }
 .drawing-status { position: absolute; z-index: 840; top: 104px; left: 50%; transform: translateX(-50%); border: 1px solid var(--amber); background: rgba(17,17,15,.94); color: var(--amber); padding: 9px 12px; font: 900 7px monospace; letter-spacing: .08em; }
 .takeoff-message { position: absolute; z-index: 820; left: 15px; bottom: 15px; max-width: calc(100% - 210px); border-left: 4px solid var(--amber); background: rgba(17,17,15,.9); color: white; padding: 9px 12px; }
 .takeoff-message strong { font-size: 8px; line-height: 1.4; }

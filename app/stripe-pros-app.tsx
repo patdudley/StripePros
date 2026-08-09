@@ -1,13 +1,21 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import type { Map as LeafletMap, Polygon as LeafletPolygon } from "leaflet";
+import type { Map as LeafletMap, Polygon as LeafletPolygon, TileLayer } from "leaflet";
 import turfArea from "@turf/area";
 import { PRICE_UNITS, UNIT_LABELS, type PriceUnit } from "@/lib/price-book";
 
 type User = { id: string; email: string; companyName: string };
 type GeocodeResult = { label: string; lat: number; lng: number };
 type AddressSuggestion = GeocodeResult & { primary: string; secondary: string };
+type MapImageryConfig = {
+  provider: "esri" | "nearmap";
+  tileUrl: string;
+  maxZoom: number;
+  coverageStatus: "available" | "unchecked" | "unconfigured" | "unavailable" | "error";
+  captureDate: string | null;
+  resolutionCm: number | null;
+};
 type DemoBoundary = LeafletPolygon & {
   pm: { enable(options?: Record<string, unknown>): void; disable(): void };
   toGeoJSON(): Parameters<typeof turfArea>[0];
@@ -78,6 +86,7 @@ function ProductDemo() {
   const demoMapElementRef = useRef<HTMLDivElement>(null);
   const demoMapRef = useRef<LeafletMap | null>(null);
   const demoLeafletRef = useRef<typeof import("leaflet") | null>(null);
+  const demoTileLayerRef = useRef<TileLayer | null>(null);
   const demoBoundaryRef = useRef<DemoBoundary | null>(null);
   const demoScanZoomRef = useRef(19);
   const [phase, setPhase] = useState<"typing" | "scanning" | "quote">("typing");
@@ -88,7 +97,7 @@ function ProductDemo() {
   const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
   const [suggesting, setSuggesting] = useState(false);
   const [activeSuggestion, setActiveSuggestion] = useState(-1);
-  const [imageryProvider, setImageryProvider] = useState<"esri" | "nearmap">("esri");
+  const [imageryDetail, setImageryDetail] = useState("STANDARD AERIAL · HD READY");
   const [boundaryEditing, setBoundaryEditing] = useState(false);
   const [lotArea, setLotArea] = useState(0);
   const [draftCounts, setDraftCounts] = useState({ stalls: 0, ada: 0, arrows: 0, curb: 0 });
@@ -106,18 +115,43 @@ function ProductDemo() {
       await import("@geoman-io/leaflet-geoman-free");
       map = L.map(demoMapElementRef.current, { center: [32.7849, -117.1258], zoom: 18, zoomControl: false, attributionControl: true, dragging: false, scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false, touchZoom: false });
       demoMapRef.current = map;
-      let tileUrl = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
-      let attribution = "Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community";
-      let maxZoom = 20;
-      try {
-        const response = await fetch("/api/map-config");
-        const config = await response.json() as { provider?: string; tileUrl?: string };
-        if (config.provider === "nearmap" && config.tileUrl) { tileUrl = config.tileUrl; attribution = "Aerial imagery © Nearmap"; maxZoom = 22; demoScanZoomRef.current = 21; setImageryProvider("nearmap"); }
-      } catch { /* retain Esri aerial imagery */ }
-      L.tileLayer(tileUrl, { maxZoom, crossOrigin: "anonymous", attribution }).addTo(map);
+      demoTileLayerRef.current = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19, maxNativeZoom: 19, crossOrigin: "anonymous", attribution: "Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community" }).addTo(map);
+      await configureDemoImagery();
     })();
-    return () => { active = false; map?.remove(); demoMapRef.current = null; demoLeafletRef.current = null; demoBoundaryRef.current = null; };
+    return () => { active = false; map?.remove(); demoMapRef.current = null; demoLeafletRef.current = null; demoTileLayerRef.current = null; demoBoundaryRef.current = null; };
   }, []);
+
+  async function configureDemoImagery(site?: GeocodeResult) {
+    const map = demoMapRef.current;
+    const L = demoLeafletRef.current;
+    if (!map || !L) return;
+    try {
+      const query = site ? `?lat=${encodeURIComponent(site.lat)}&lng=${encodeURIComponent(site.lng)}` : "";
+      const response = await fetch(`/api/map-config${query}`);
+      if (!response.ok) return;
+      const config = await response.json() as MapImageryConfig;
+      const nextLayer = L.tileLayer(config.tileUrl, {
+        maxZoom: config.maxZoom,
+        maxNativeZoom: config.maxZoom,
+        crossOrigin: "anonymous",
+        attribution: config.provider === "nearmap" ? "Aerial imagery © Nearmap" : "Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+      }).addTo(map) as TileLayer;
+      if (demoTileLayerRef.current) map.removeLayer(demoTileLayerRef.current);
+      demoTileLayerRef.current = nextLayer;
+      demoScanZoomRef.current = config.maxZoom;
+      if (config.provider === "nearmap") {
+        const captured = config.captureDate ? ` · ${new Date(`${config.captureDate}T12:00:00`).toLocaleDateString("en-US", { month: "short", year: "numeric" }).toUpperCase()}` : "";
+        const resolution = config.resolutionCm ? ` · ${config.resolutionCm} CM/PIXEL` : "";
+        setImageryDetail(`NEARMAP HD${captured}${resolution}`);
+      } else if (config.coverageStatus === "unavailable") {
+        setImageryDetail("NO NEARMAP COVERAGE · STANDARD AERIAL");
+      } else if (config.coverageStatus === "error") {
+        setImageryDetail("HD IMAGERY UNAVAILABLE · STANDARD AERIAL");
+      } else {
+        setImageryDetail("STANDARD AERIAL · HD READY");
+      }
+    } catch { /* retain the current imagery layer */ }
+  }
 
   useEffect(() => {
     if (phase === "scanning") {
@@ -243,6 +277,7 @@ function ProductDemo() {
       const site = selectedSite ?? result?.results[0];
       if (!site) throw new Error("We could not find that address. Try including the city and state.");
       setSelectedSite(site);
+      await configureDemoImagery(site);
       createDemoBoundary(site);
       setPhase("scanning");
     } catch (caught) {
@@ -299,7 +334,7 @@ function ProductDemo() {
             <div ref={demoMapElementRef} className={`demo-real-map ${boundaryEditing ? "editing" : ""}`} aria-label={`Aerial imagery of ${propertyName}`} />
             <div className="demo-step-label demo-map-label"><b>02</b><span>SCAN THE PARKING LOT</span></div>
             {phase === "scanning" && <div className="scan-line"><span>MEASURING SITE</span></div>}
-            {(phase === "scanning" || phase === "quote") && <div className="scan-hud"><span><i /> {imageryProvider === "nearmap" ? "HD NEARMAP AERIAL" : "STANDARD AERIAL · HD READY"}</span><strong>{phase === "quote" ? "DRAFT SCAN — VERIFY BELOW" : "SCANNING STRIPING LAYOUT"}</strong></div>}
+            {(phase === "scanning" || phase === "quote") && <div className="scan-hud"><span><i /> {imageryDetail}</span><strong>{phase === "quote" ? "DRAFT SCAN — VERIFY BELOW" : "SCANNING STRIPING LAYOUT"}</strong></div>}
             {phase === "quote" && <><button className="edit-demo-boundary" onClick={toggleDemoBoundary}>{boundaryEditing ? "SAVE LOT OUTLINE" : "EDIT LOT OUTLINE"}</button><div className="map-summary editable"><div><span>STALLS</span><b><button onClick={() => adjustDraftCount("stalls", -1)} aria-label="Remove one stall">−</button>{mockQuote.stalls}<button onClick={() => adjustDraftCount("stalls", 1)} aria-label="Add one stall">＋</button></b></div><div><span>ADA</span><b><button onClick={() => adjustDraftCount("ada", -1)} aria-label="Remove one ADA stall">−</button>{mockQuote.ada}<button onClick={() => adjustDraftCount("ada", 1)} aria-label="Add one ADA stall">＋</button></b></div><div><span>ARROWS</span><b><button onClick={() => adjustDraftCount("arrows", -1)} aria-label="Remove one directional arrow">−</button>{mockQuote.arrows}<button onClick={() => adjustDraftCount("arrows", 1)} aria-label="Add one directional arrow">＋</button></b></div></div></>}
           </div>
           <div className={`quote-preview demo-stage-block ${phase === "quote" ? "revealed" : ""}`}>

@@ -47,7 +47,7 @@ type EditableDrawLayer = DrawLayer & {
   pm: { enable(options?: Record<string, unknown>): void; disable(): void };
 };
 type DrawMode = "Polygon" | "Line" | "Marker";
-type ScanState = "idle" | "ready" | "active";
+type ScanState = "idle" | "ready" | "selecting" | "active";
 type GeomanMap = LeafletMap & { pm: { enableDraw(shape: DrawMode, options?: Record<string, unknown>): void; disableDraw(): void } };
 type LotDimensions = { length: number; width: number; area: number; perimeter: number };
 
@@ -60,19 +60,6 @@ function BrandMark() {
 
 function CountAdjuster({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) {
   return <div className="count-adjuster"><span>{label}</span><div><button onClick={() => onChange(Math.max(0, value - 1))} aria-label={`Remove one ${label}`}>−</button><input aria-label={label} type="number" min="0" value={value} onChange={(event) => onChange(Math.max(0, Number(event.target.value)))} /><button onClick={() => onChange(value + 1)} aria-label={`Add one ${label}`}>＋</button></div></div>;
-}
-
-function requiredAdaStalls(totalStalls: number) {
-  if (totalStalls <= 25) return 1;
-  if (totalStalls <= 50) return 2;
-  if (totalStalls <= 75) return 3;
-  if (totalStalls <= 100) return 4;
-  if (totalStalls <= 150) return 5;
-  if (totalStalls <= 200) return 6;
-  if (totalStalls <= 300) return 7;
-  if (totalStalls <= 400) return 8;
-  if (totalStalls <= 500) return 9;
-  return Math.ceil(totalStalls / 100) + 4;
 }
 
 function IntegrationHub({ address, total, itemCount }: { address: string; total: number; itemCount: number }) {
@@ -121,10 +108,12 @@ export function QuoteWorkspace() {
   const mapRef = useRef<LeafletMap | null>(null);
   const baseLayerRef = useRef<TileLayer | null>(null);
   const labelLayerRef = useRef<TileLayer | null>(null);
+  const imageryMaxZoomRef = useRef(19);
   const layerByMeasurementRef = useRef(new Map<string, LeafletLayer>());
   const leafletRef = useRef<typeof import("leaflet") | null>(null);
   const scanBoundaryRef = useRef<EditableDrawLayer | null>(null);
   const scanBoundaryMeasurementIdRef = useRef<string | null>(null);
+  const selectingBoundaryRef = useRef(false);
   const [drawMode, setDrawMode] = useState<DrawMode | null>(null);
   const [mapStyle, setMapStyle] = useState<"aerial" | "street">("aerial");
   const [imageryInfo, setImageryInfo] = useState({ provider: "esri" as "esri" | "mapbox" | "nearmap", label: "ESRI STANDARD AERIAL", detail: "MAPBOX READY", maxZoom: 19 });
@@ -200,6 +189,26 @@ export function QuoteWorkspace() {
 
       map.on("pm:create", (rawEvent) => {
         const event = rawEvent as unknown as { shape: string; layer: DrawLayer };
+        if (event.shape === "Polygon" && selectingBoundaryRef.current) {
+          const boundary = event.layer as EditableDrawLayer;
+          selectingBoundaryRef.current = false;
+          boundary.setStyle({ color: "#ffb400", weight: 3, fillColor: "#ffb400", fillOpacity: .2, dashArray: "8 6" });
+          scanBoundaryRef.current = boundary;
+          boundary.on("pm:edit", () => {
+            updateScannedBoundary(boundary);
+            setScanVerified(false);
+            setExportMessage("Boundary updated. Review the lot dimensions and enter each striping count before exporting.");
+          });
+          updateScannedBoundary(boundary);
+          setScanState("active");
+          setBoundaryEditing(false);
+          setScanVerified(false);
+          setExportMessage("Lot selected. Enter the stalls, ADA spaces, crosswalks, arrows, and stop bars you can see.");
+          (map as GeomanMap).pm.disableDraw();
+          setDrawMode(null);
+          map.fitBounds(boundary.getBounds(), { padding: [54, 54], maxZoom: imageryMaxZoomRef.current, animate: true });
+          return;
+        }
         const geojson = event.layer.toGeoJSON();
         const id = crypto.randomUUID();
         layerByMeasurementRef.current.set(id, event.layer);
@@ -244,6 +253,7 @@ export function QuoteWorkspace() {
       }).addTo(map) as TileLayer;
       if (baseLayerRef.current) map.removeLayer(baseLayerRef.current);
       baseLayerRef.current = nextLayer;
+      imageryMaxZoomRef.current = config.maxZoom;
       if (labelLayerRef.current) {
         if (config.provider !== "esri" && map.hasLayer(labelLayerRef.current)) map.removeLayer(labelLayerRef.current);
         if (config.provider === "esri" && !map.hasLayer(labelLayerRef.current)) labelLayerRef.current.addTo(map);
@@ -303,7 +313,7 @@ export function QuoteWorkspace() {
     }
   }
 
-  function updateScannedBoundary(layer: EditableDrawLayer, refreshCounts = true) {
+  function updateScannedBoundary(layer: EditableDrawLayer) {
     const map = mapRef.current;
     if (!map) return;
     const geojson = layer.toGeoJSON();
@@ -333,16 +343,6 @@ export function QuoteWorkspace() {
       setMeasurements((current) => [...current, { id, label: "Estimated lot boundary", kind: "area", value: area, unit: "sqft", linkedItem: "lot" }]);
     }
 
-    if (refreshCounts) {
-      const seed = selectedSite ? Math.abs(Math.round(selectedSite.lat * 1000) + Math.round(selectedSite.lng * 1000)) : 0;
-      const totalStalls = 24 + seed % 11;
-      const ada = requiredAdaStalls(totalStalls);
-      setStandardStalls(Math.max(0, totalStalls - ada));
-      setAdaStalls(ada);
-      setCrosswalks(totalStalls >= 70 ? 2 : 1);
-      setArrows(Math.max(1, Math.round(totalStalls / 28)));
-      setStopBars(totalStalls >= 55 ? 2 : 1);
-    }
   }
 
   function selectAddress(result: GeocodeResult) {
@@ -362,6 +362,7 @@ export function QuoteWorkspace() {
     setStopBars(0);
     setLotDimensions(null);
     setBoundaryEditing(false);
+    selectingBoundaryRef.current = false;
     scanBoundaryRef.current = null;
     scanBoundaryMeasurementIdRef.current = null;
     setExportMessage("New site loaded. Verify the work boundary and count the lot before generating a proposal.");
@@ -369,10 +370,9 @@ export function QuoteWorkspace() {
     if (mapStyle === "aerial") void loadAerialImagery(result);
   }
 
-  function beginLotScan() {
-    const L = leafletRef.current;
+  function beginLotSelection() {
     const map = mapRef.current as GeomanMap | null;
-    if (!selectedSite || !L || !map) return;
+    if (!selectedSite || !map) return;
     layerByMeasurementRef.current.forEach((layer) => map.removeLayer(layer));
     layerByMeasurementRef.current.clear();
     setMeasurements([]);
@@ -380,31 +380,21 @@ export function QuoteWorkspace() {
     scanBoundaryRef.current = null;
     setBoundaryEditing(false);
     setScanVerified(false);
-
-    const seed = Math.abs(Math.round(selectedSite.lat * 1000) + Math.round(selectedSite.lng * 1000));
-    const estimatedLength = 225 + seed % 51;
-    const estimatedWidth = 155 + (seed * 7) % 41;
-    const halfLat = (estimatedWidth / 2) / 364000;
-    const halfLng = (estimatedLength / 2) / (364000 * Math.cos(selectedSite.lat * Math.PI / 180));
-    const boundary = L.polygon([
-      [selectedSite.lat - halfLat, selectedSite.lng - halfLng],
-      [selectedSite.lat - halfLat, selectedSite.lng + halfLng],
-      [selectedSite.lat + halfLat, selectedSite.lng + halfLng],
-      [selectedSite.lat + halfLat, selectedSite.lng - halfLng],
-    ], { color: "#ffb400", weight: 3, fillColor: "#ffb400", fillOpacity: .2, dashArray: "8 6" }).addTo(map) as unknown as EditableDrawLayer;
-    scanBoundaryRef.current = boundary;
-    boundary.on("pm:edit", () => {
-      updateScannedBoundary(boundary, false);
-      setScanVerified(false);
-      setExportMessage("Boundary updated. The lot dimensions changed; review each detected count before exporting.");
-    });
-    updateScannedBoundary(boundary, true);
-
-    setScanState("active");
-    setExportMessage("Draft scan generated. Drag the highlighted boundary and correct every count before exporting.");
+    selectingBoundaryRef.current = true;
+    setScanState("selecting");
+    setExportMessage("Click each corner around the actual parking lot, then click the first point again to finish.");
     map.pm.disableDraw();
+    map.pm.enableDraw("Polygon", { snappable: true, continueDrawing: false, allowSelfIntersection: false });
+    setDrawMode("Polygon");
+  }
+
+  function cancelLotSelection() {
+    const map = mapRef.current as GeomanMap | null;
+    selectingBoundaryRef.current = false;
+    map?.pm.disableDraw();
     setDrawMode(null);
-    map.fitBounds(boundary.getBounds(), { padding: [54, 54], maxZoom: imageryInfo.maxZoom, animate: true });
+    setScanState("ready");
+    setExportMessage("Lot selection canceled. Start again when the property is positioned correctly.");
   }
 
   function toggleBoundaryEditing() {
@@ -595,26 +585,26 @@ export function QuoteWorkspace() {
         <div className="map-stage">
           <div ref={mapElementRef} className="live-map" />
           {scanState !== "idle" && <div className={`scan-lot-cta ${scanState === "active" ? "active" : ""}`} role="status">
-            <span>{scanState === "ready" ? "ADDRESS FOUND" : scanVerified ? "VERIFIED" : "DRAFT SCAN"}</span>
-            <div><strong>{scanState === "ready" ? "Ready to scan this parking lot" : scanVerified ? "Corrected takeoff ready" : "Verify the highlighted lot and every count"}</strong><small>{scanState === "ready" ? "Generate an editable first-pass boundary and scope." : scanVerified ? "Save the estimate or export the proposal when ready." : "The scan is an estimate—drag the outline and use + / − before quoting."}</small></div>
-            {scanState === "ready" ? <button onClick={beginLotScan}>SCAN THIS LOT <b>→</b></button> : <div className="scan-lot-actions"><button onClick={toggleBoundaryEditing}>{boundaryEditing ? "SAVE OUTLINE" : "EDIT OUTLINE"}</button><button onClick={() => startDrawing("Marker")}>＋ ADD STALL</button></div>}
+            <span>{scanState === "ready" ? "ADDRESS FOUND" : scanState === "selecting" ? "DRAWING LOT" : scanVerified ? "VERIFIED" : "MANUAL TAKEOFF"}</span>
+            <div><strong>{scanState === "ready" ? "Select the actual parking lot" : scanState === "selecting" ? "Click around the paved work area" : scanVerified ? "Corrected takeoff ready" : "Review the selected lot and enter every count"}</strong><small>{scanState === "ready" ? "You choose the boundary so neighboring roads and buildings stay out." : scanState === "selecting" ? "Click each corner, then click the first point again to finish." : scanVerified ? "Save the estimate or export the proposal when ready." : "Drag the outline if needed, then use the count controls before quoting."}</small></div>
+            {scanState === "ready" ? <button onClick={beginLotSelection}>DRAW LOT BOUNDARY <b>→</b></button> : scanState === "selecting" ? <button onClick={cancelLotSelection}>CANCEL DRAWING</button> : <div className="scan-lot-actions"><button onClick={toggleBoundaryEditing}>{boundaryEditing ? "SAVE OUTLINE" : "EDIT OUTLINE"}</button><button onClick={() => startDrawing("Marker")}>＋ ADD STALL</button></div>}
           </div>}
           <div className="map-style-switch" aria-label="Map style"><button className={mapStyle === "aerial" ? "active" : ""} onClick={() => void switchMapStyle("aerial")}>SATELLITE</button><button className={mapStyle === "street" ? "active" : ""} onClick={() => void switchMapStyle("street")}>STREET</button></div>
           <div className="map-draw-tools" aria-label="Map measurement tools"><button className={drawMode === "Polygon" ? "active" : ""} onClick={() => startDrawing("Polygon")}>▰ AREA</button><button className={drawMode === "Line" ? "active" : ""} onClick={() => startDrawing("Line")}>╱ LENGTH</button><button className={drawMode === "Marker" ? "active" : ""} onClick={() => startDrawing("Marker")}>• COUNT</button></div>
           <div className="map-instructions"><strong>DRAW THE TAKEOFF</strong><span>Polygon = paved area</span><span>Line = curb footage</span><span>Marker = parking stall</span></div>
           {scanState === "active" && lotDimensions && <div className="scan-review-card">
-            <header><span>ESTIMATED LOT</span><b>{scanVerified ? "VERIFIED" : "NEEDS REVIEW"}</b></header>
+            <header><span>SELECTED LOT</span><b>{scanVerified ? "VERIFIED" : "NEEDS REVIEW"}</b></header>
             <div><span><strong>{number.format(lotDimensions.length)}′</strong><small>LENGTH</small></span><span><strong>{number.format(lotDimensions.width)}′</strong><small>WIDTH</small></span><span><strong>{number.format(lotDimensions.area)}</strong><small>SQ FT</small></span><span><strong>{number.format(lotDimensions.perimeter)}′</strong><small>PERIMETER</small></span></div>
-            <p>Drag the yellow corners to fit the actual paved work area. Then correct the detected items in the quote panel.</p>
+            <p>Drag the yellow corners if the boundary needs adjustment. Then enter the visible striping items in the quote panel.</p>
             {!scanVerified && <button onClick={confirmScan}>VERIFY COUNTS &amp; UNLOCK QUOTE →</button>}
           </div>}
-          {scanState === "idle" && <div className="assist-banner"><span>SMART DETECTION</span><strong>Search an address to scan a parking lot</strong><small>Manual takeoff tools are live and editable today.</small></div>}
+          {scanState === "idle" && <div className="assist-banner"><span>MANUAL TAKEOFF</span><strong>Search an address, then select the parking lot</strong><small>Choose the real work area before counting or pricing.</small></div>}
         </div>
         <aside className="estimate-panel">
           <div className="estimate-panel-head"><div><p>{scanState === "active" && !scanVerified ? "DRAFT ESTIMATE" : "LIVE ESTIMATE"}</p><h1>{currency.format(calculation.total)}</h1></div><span>{scanState === "active" && !scanVerified ? "VERIFY" : `${quoteItems.length} ITEMS`}</span></div>
           <div className="material-switch"><span>MATERIAL</span><button className={material === "paint" ? "selected" : ""} onClick={() => setMaterial("paint")}>PAINT <small>1.0×</small></button><button className={material === "thermoplastic" ? "selected" : ""} onClick={() => setMaterial("thermoplastic")}>THERMO <small>2.8×</small></button></div>
           <div className="manual-counts">
-            <div className="panel-section-title"><span>SCAN COUNTS</span><small>EDIT ANY GUESS</small></div>
+            <div className="panel-section-title"><span>MANUAL COUNTS</span><small>ENTER &amp; VERIFY</small></div>
             <CountAdjuster label="Standard stalls" value={standardStalls + mapCounts.stalls} onChange={(value) => { setStandardStalls(Math.max(0, value - mapCounts.stalls)); setScanVerified(false); }} />
             <CountAdjuster label="ADA stalls" value={adaStalls} onChange={(value) => { setAdaStalls(value); setScanVerified(false); }} />
             <CountAdjuster label="Crosswalks / hatching" value={crosswalks} onChange={(value) => { setCrosswalks(value); setScanVerified(false); }} />

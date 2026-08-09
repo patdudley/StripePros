@@ -20,6 +20,7 @@ type DemoBoundary = LeafletPolygon & {
   pm: { enable(options?: Record<string, unknown>): void; disable(): void };
   toGeoJSON(): Parameters<typeof turfArea>[0];
 };
+type DemoGeomanMap = LeafletMap & { pm: { enableDraw(shape: "Polygon", options?: Record<string, unknown>): void; disableDraw(): void } };
 type PriceItem = {
   id: string;
   name: string;
@@ -89,7 +90,7 @@ function ProductDemo() {
   const demoTileLayerRef = useRef<TileLayer | null>(null);
   const demoBoundaryRef = useRef<DemoBoundary | null>(null);
   const demoScanZoomRef = useRef(19);
-  const [phase, setPhase] = useState<"typing" | "scanning" | "quote">("typing");
+  const [phase, setPhase] = useState<"typing" | "selecting" | "scanning" | "quote">("typing");
   const [address, setAddress] = useState("");
   const [selectedSite, setSelectedSite] = useState<GeocodeResult | null>(null);
   const [searching, setSearching] = useState(false);
@@ -99,6 +100,7 @@ function ProductDemo() {
   const [activeSuggestion, setActiveSuggestion] = useState(-1);
   const [imageryDetail, setImageryDetail] = useState("STANDARD AERIAL · HD READY");
   const [boundaryEditing, setBoundaryEditing] = useState(false);
+  const [selectingLot, setSelectingLot] = useState(false);
   const [lotArea, setLotArea] = useState(0);
   const [draftCounts, setDraftCounts] = useState({ stalls: 0, ada: 0, arrows: 0, curb: 0 });
   const suppressSuggestionsRef = useRef(false);
@@ -116,6 +118,24 @@ function ProductDemo() {
       map = L.map(demoMapElementRef.current, { center: [32.7849, -117.1258], zoom: 18, zoomControl: false, attributionControl: true, dragging: false, scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false, touchZoom: false });
       demoMapRef.current = map;
       demoTileLayerRef.current = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19, maxNativeZoom: 19, crossOrigin: "anonymous", attribution: "Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community" }).addTo(map);
+      map.on("pm:create", (rawEvent) => {
+        const event = rawEvent as unknown as { shape: string; layer: DemoBoundary };
+        if (event.shape !== "Polygon") return;
+        const boundary = event.layer;
+        if (demoBoundaryRef.current && demoBoundaryRef.current !== boundary) map?.removeLayer(demoBoundaryRef.current);
+        boundary.setStyle({ color: "#ffb400", weight: 4, fillColor: "#ffb400", fillOpacity: .22, dashArray: "10 7" });
+        boundary.bindTooltip("SELECTED LOT", { permanent: true, direction: "center", className: "demo-lot-tooltip" });
+        boundary.on("pm:edit", () => updateDemoBoundary(boundary));
+        demoBoundaryRef.current = boundary;
+        updateDemoBoundary(boundary);
+        (map as DemoGeomanMap).pm.disableDraw();
+        map.dragging.disable();
+        map.scrollWheelZoom.disable();
+        map.touchZoom.disable();
+        setSelectingLot(false);
+        setPhase("scanning");
+        map.fitBounds(boundary.getBounds(), { padding: [34, 34], maxZoom: demoScanZoomRef.current, animate: true });
+      });
       await configureDemoImagery();
     })();
     return () => { active = false; map?.remove(); demoMapRef.current = null; demoLeafletRef.current = null; demoTileLayerRef.current = null; demoBoundaryRef.current = null; };
@@ -194,14 +214,19 @@ function ProductDemo() {
     setSearchError("");
     setSuggestions([]);
     setBoundaryEditing(false);
+    setSelectingLot(false);
     setLotArea(0);
     setDraftCounts({ stalls: 0, ada: 0, arrows: 0, curb: 0 });
     if (demoBoundaryRef.current) demoMapRef.current?.removeLayer(demoBoundaryRef.current);
     demoBoundaryRef.current = null;
+    (demoMapRef.current as DemoGeomanMap | null)?.pm.disableDraw();
+    demoMapRef.current?.dragging.disable();
+    demoMapRef.current?.scrollWheelZoom.disable();
+    demoMapRef.current?.touchZoom.disable();
     demoMapRef.current?.flyTo([32.7849, -117.1258], 18, { duration: .8 });
   }
 
-  function updateDemoBoundary(boundary: DemoBoundary, initializeCounts = false, countSite = selectedSite) {
+  function updateDemoBoundary(boundary: DemoBoundary) {
     const map = demoMapRef.current;
     if (!map) return;
     const area = turfArea(boundary.toGeoJSON()) * 10.7639;
@@ -209,35 +234,24 @@ function ProductDemo() {
     const perimeter = 2 * (map.distance(bounds.getNorthWest(), bounds.getNorthEast()) + map.distance(bounds.getNorthWest(), bounds.getSouthWest())) * 3.28084;
     setLotArea(area);
     boundary.setTooltipContent(`${Math.round(area).toLocaleString("en-US")} SQ FT · DRAFT OUTLINE`);
-    setDraftCounts((current) => {
-      if (!initializeCounts) return { ...current, curb: Math.max(0, Math.round(perimeter)) };
-      const seed = countSite ? Math.abs(Math.round(countSite.lat * 1000) + Math.round(countSite.lng * 1000)) : 0;
-      const stalls = 24 + seed % 11;
-      const ada = stalls <= 25 ? 1 : 2;
-      return { stalls, ada, arrows: Math.max(1, Math.round(stalls / 16)), curb: Math.max(0, Math.round(perimeter)) };
-    });
+    setDraftCounts((current) => ({ ...current, curb: Math.max(0, Math.round(perimeter)) }));
   }
 
-  function createDemoBoundary(site: GeocodeResult) {
-    const L = demoLeafletRef.current;
-    const map = demoMapRef.current;
-    if (!L || !map) return;
+  function beginDemoLotSelection(site: GeocodeResult) {
+    const map = demoMapRef.current as DemoGeomanMap | null;
+    if (!map) return;
     if (demoBoundaryRef.current) map.removeLayer(demoBoundaryRef.current);
-    const halfNorthSouthFeet = 95;
-    const halfEastWestFeet = 135;
-    const halfLat = halfNorthSouthFeet / 364000;
-    const halfLng = halfEastWestFeet / (364000 * Math.cos(site.lat * Math.PI / 180));
-    const boundary = L.polygon([
-      [site.lat - halfLat, site.lng - halfLng],
-      [site.lat - halfLat, site.lng + halfLng],
-      [site.lat + halfLat, site.lng + halfLng],
-      [site.lat + halfLat, site.lng - halfLng],
-    ], { color: "#ffb400", weight: 4, fillColor: "#ffb400", fillOpacity: .22, dashArray: "10 7" }).addTo(map) as unknown as DemoBoundary;
-    boundary.bindTooltip("DRAFT OUTLINE", { permanent: true, direction: "center", className: "demo-lot-tooltip" });
-    boundary.on("pm:edit", () => updateDemoBoundary(boundary));
-    demoBoundaryRef.current = boundary;
-    updateDemoBoundary(boundary, true, site);
-    map.fitBounds(boundary.getBounds(), { padding: [34, 34], maxZoom: demoScanZoomRef.current, animate: true });
+    demoBoundaryRef.current = null;
+    setLotArea(0);
+    setDraftCounts({ stalls: 0, ada: 0, arrows: 0, curb: 0 });
+    setSelectingLot(true);
+    setPhase("selecting");
+    map.flyTo([site.lat, site.lng], Math.min(19, demoScanZoomRef.current), { duration: 1 });
+    map.dragging.enable();
+    map.scrollWheelZoom.enable();
+    map.touchZoom.enable();
+    map.pm.disableDraw();
+    map.pm.enableDraw("Polygon", { snappable: true, allowSelfIntersection: false });
   }
 
   function toggleDemoBoundary() {
@@ -247,10 +261,16 @@ function ProductDemo() {
       boundary.pm.disable();
       boundary.setStyle({ dashArray: "10 7", fillOpacity: .22 });
       setBoundaryEditing(false);
+      demoMapRef.current?.dragging.disable();
+      demoMapRef.current?.scrollWheelZoom.disable();
+      demoMapRef.current?.touchZoom.disable();
     } else {
       boundary.pm.enable({ allowSelfIntersection: false, snappable: true });
       boundary.setStyle({ dashArray: undefined, fillOpacity: .28 });
       setBoundaryEditing(true);
+      demoMapRef.current?.dragging.enable();
+      demoMapRef.current?.scrollWheelZoom.enable();
+      demoMapRef.current?.touchZoom.enable();
     }
   }
 
@@ -280,8 +300,7 @@ function ProductDemo() {
       if (!site) throw new Error("We could not find that address. Try including the city and state.");
       setSelectedSite(site);
       await configureDemoImagery(site);
-      createDemoBoundary(site);
-      setPhase("scanning");
+      beginDemoLotSelection(site);
     } catch (caught) {
       setPhase("typing");
       setSearchError(caught instanceof Error ? caught.message : "Could not find that property.");
@@ -317,7 +336,7 @@ function ProductDemo() {
               if (event.key === "Enter" && activeSuggestion >= 0) { event.preventDefault(); selectSuggestion(suggestions[activeSuggestion]); }
               if (event.key === "Escape") { setSuggestions([]); setActiveSuggestion(-1); }
             }} placeholder="Try 737 Pearl St, La Jolla, CA" autoComplete="off" />
-            <button disabled={!address.trim() || searching || phase === "scanning"}>{searching ? "FINDING ADDRESS…" : phase === "scanning" ? "ANALYZING…" : "ANALYZE LOT"}</button>
+            <button disabled={!address.trim() || searching || phase === "selecting" || phase === "scanning"}>{searching ? "FINDING ADDRESS…" : phase === "selecting" ? "SELECT LOT ON MAP…" : phase === "scanning" ? "BUILDING DRAFT…" : "SELECT LOT"}</button>
             {(suggesting || suggestions.length > 0) && <div className="demo-suggestions" id="demo-address-suggestions" role="listbox">
               {suggesting && !suggestions.length ? <span>SEARCHING ADDRESSES…</span> : suggestions.map((suggestion, index) => <button id={`demo-suggestion-${index}`} role="option" aria-selected={index === activeSuggestion} className={index === activeSuggestion ? "active" : ""} type="button" key={`${suggestion.lat}-${suggestion.lng}-${index}`} onMouseDown={(event) => event.preventDefault()} onClick={() => selectSuggestion(suggestion)}><i>⌖</i><span><strong>{suggestion.primary}</strong><small>{suggestion.secondary}</small></span></button>)}
             </div>}
@@ -326,17 +345,18 @@ function ProductDemo() {
           <div className="demo-progress" aria-live="polite">
             <span className={selectedSite ? "done" : "active"}><i>1</i> Address found</span>
             <b />
-            <span className={phase === "scanning" ? "active" : phase === "quote" ? "done" : ""}><i>2</i> Lot measured</span>
+            <span className={phase === "selecting" || phase === "scanning" ? "active" : phase === "quote" ? "done" : ""}><i>2</i> Lot selected</span>
             <b />
             <span className={phase === "quote" ? "done" : ""}><i>3</i> Quote ready</span>
           </div>
           <div className={`demo-address-found ${selectedSite ? "matched" : ""}`}><span>{selectedSite ? "PROPERTY MATCH" : "LIVE ADDRESS DEMO"}</span><strong>{propertyName}</strong><small>{propertyLocation}</small></div>
         </div>
-          <div className={`lot-canvas demo-stage-block ${phase} ${boundaryEditing ? "editing" : ""}`}>
-            <div ref={demoMapElementRef} className={`demo-real-map ${boundaryEditing ? "editing" : ""}`} aria-label={`Aerial imagery of ${propertyName}`} />
-            <div className="demo-step-label demo-map-label"><b>02</b><span>SCAN THE PARKING LOT</span></div>
+          <div className={`lot-canvas demo-stage-block ${phase} ${boundaryEditing || selectingLot ? "editing" : ""}`}>
+            <div ref={demoMapElementRef} className={`demo-real-map ${boundaryEditing || selectingLot ? "editing" : ""}`} aria-label={`Aerial imagery of ${propertyName}`} />
+            <div className="demo-step-label demo-map-label"><b>02</b><span>SELECT THE PARKING LOT</span></div>
+            {phase === "selecting" && <div className="lot-selection-guide"><strong>DRAW THE LOT BOUNDARY</strong><span>Click each corner around the parking area, then click the first point again to finish.</span></div>}
             {phase === "scanning" && <div className="scan-line"><span>MEASURING SITE</span></div>}
-            {(phase === "scanning" || phase === "quote") && <div className="scan-hud"><span><i /> {imageryDetail}</span><strong>{phase === "quote" ? "DRAFT SCAN — VERIFY BELOW" : "SCANNING STRIPING LAYOUT"}</strong></div>}
+            {(phase === "selecting" || phase === "scanning" || phase === "quote") && <div className="scan-hud"><span><i /> {imageryDetail}</span><strong>{phase === "selecting" ? "MANUAL LOT SELECTION" : phase === "quote" ? "MANUAL TAKEOFF — VERIFY BELOW" : "BUILDING EDITABLE DRAFT"}</strong></div>}
             {phase === "quote" && <><button className="edit-demo-boundary" onClick={toggleDemoBoundary}>{boundaryEditing ? "SAVE LOT OUTLINE" : "EDIT LOT OUTLINE"}</button><div className="map-summary editable"><div><span>STALLS</span><b><button onClick={() => adjustDraftCount("stalls", -1)} aria-label="Remove one stall">−</button>{mockQuote.stalls}<button onClick={() => adjustDraftCount("stalls", 1)} aria-label="Add one stall">＋</button></b></div><div><span>ADA</span><b><button onClick={() => adjustDraftCount("ada", -1)} aria-label="Remove one ADA stall">−</button>{mockQuote.ada}<button onClick={() => adjustDraftCount("ada", 1)} aria-label="Add one ADA stall">＋</button></b></div><div><span>ARROWS</span><b><button onClick={() => adjustDraftCount("arrows", -1)} aria-label="Remove one directional arrow">−</button>{mockQuote.arrows}<button onClick={() => adjustDraftCount("arrows", 1)} aria-label="Add one directional arrow">＋</button></b></div></div></>}
           </div>
           <div className={`quote-preview demo-stage-block ${phase === "quote" ? "revealed" : ""}`}>
@@ -382,7 +402,7 @@ function HomeScreen({ onAuthenticated }: { onAuthenticated: (user: User) => void
         <h2>Drive less. Quote more.</h2>
         <div className="workflow-grid">
           <article><span>01</span><div className="workflow-icon address-icon">⌖</div><h3>Enter an address</h3><p>Open current aerial imagery for any customer site—right from your office.</p></article>
-          <article><span>02</span><div className="workflow-icon scan-icon">⌗</div><h3>Scan the parking lot</h3><p>Measure stalls, lines, curbs, and markings directly on the aerial map.</p></article>
+          <article><span>02</span><div className="workflow-icon scan-icon">⌗</div><h3>Select the parking lot</h3><p>Click around the real paved work area, then enter and verify the visible markings.</p></article>
           <article><span>03</span><div className="workflow-icon quote-icon">$</div><h3>Send the proposal</h3><p>Your pricing becomes a clean, branded proposal with an annotated site map.</p></article>
         </div>
       </section>

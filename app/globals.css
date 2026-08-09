@@ -161,6 +161,9 @@ button { cursor: pointer; }
 @keyframes scanLot { 0%, 100% { top: 12%; } 50% { top: 84%; } }
 .scan-hud { position: absolute; z-index: 9; top: 72px; left: 17px; right: 17px; display: flex; justify-content: space-between; color: white; font: 800 7px monospace; letter-spacing: .1em; text-shadow: 0 1px 4px #000; }
 .scan-hud span i { width: 6px; height: 6px; background: #6de889; display: inline-block; border-radius: 50%; margin-right: 5px; }
+.lot-selection-guide { position: absolute; z-index: 10; left: 50%; bottom: 24px; width: min(360px, calc(100% - 34px)); transform: translateX(-50%); display: flex; flex-direction: column; gap: 5px; padding: 13px 15px; background: rgba(17,17,15,.94); border: 1px solid var(--amber); color: white; pointer-events: none; box-shadow: 4px 4px 0 rgba(255,180,0,.72); }
+.lot-selection-guide strong { color: var(--amber); font: 900 8px monospace; letter-spacing: .12em; }
+.lot-selection-guide span { font-size: 9px; line-height: 1.4; }
 .edit-demo-boundary { position: absolute; z-index: 10; right: 18px; bottom: 84px; border: 1px solid var(--amber); background: rgba(17,17,15,.94); color: var(--amber); padding: 10px 12px; font: 900 7px monospace; letter-spacing: .11em; }
 .lot-canvas.editing .edit-demo-boundary { background: var(--amber); color: var(--ink); }
 .map-summary { position: absolute; z-index: 9; left: 19px; bottom: 18px; display: flex; background: rgba(17,17,15,.91); border: 1px solid #494943; }

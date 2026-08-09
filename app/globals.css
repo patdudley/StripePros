@@ -69,7 +69,7 @@ button { cursor: pointer; }
 .home-start { height: 39px; border: 0; border-radius: 999px; background: var(--ink); color: var(--paper); padding: 0 18px; font-size: 12px; font-weight: 800; }
 .home-start span { color: var(--amber); margin-left: 8px; }
 .home-hero { padding: clamp(30px, 4vw, 54px) 24px 34px; text-align: center; display: flex; flex-direction: column; align-items: center; }
-.hero-badge { display: inline-flex; align-items: center; gap: 9px; background: #ece9df; border-radius: 999px; padding: 8px 13px; color: #64615a; font: 800 9px monospace; letter-spacing: .12em; }
+.hero-badge { display: inline-flex; align-items: center; gap: 10px; background: #ece9df; border-radius: 999px; padding: 10px 16px; color: #64615a; font: 800 10.5px monospace; letter-spacing: .12em; }
 .hero-badge i { width: 7px; height: 7px; background: var(--amber); border-radius: 50%; box-shadow: 0 0 0 3px rgba(255,180,0,.18); }
 .home-hero h1 { font-size: clamp(54px, 7vw, 102px); line-height: .93; letter-spacing: -.075em; margin: 22px 0 18px; font-weight: 900; }
 .home-hero h1 em { font-family: Georgia, 'Times New Roman', serif; font-weight: 400; }
@@ -629,7 +629,7 @@ button { cursor: pointer; }
   .home-start { height: 36px; padding: 0 14px; }
   .home-hero { padding: 28px 18px 30px; }
   .home-hero h1 { font-size: 49px; }
-  .hero-badge { font-size: 7px; }
+  .hero-badge { max-width: 100%; padding: 9px 13px; font-size: 8px; line-height: 1.35; }
   .product-demo { width: calc(100% - 24px); padding: 9px; margin-bottom: 90px; border-radius: 15px; }
   .demo-browser-bar small { display: none; }
   .demo-browser-bar { grid-template-columns: 1fr auto; }

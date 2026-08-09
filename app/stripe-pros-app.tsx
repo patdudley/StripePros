@@ -404,7 +404,7 @@ function HomeScreen({ onAuthenticated }: { onAuthenticated: (user: User) => void
         <div className="home-nav-actions"><button className="home-login" onClick={() => setAuthMode("signin")}>Log in</button><button className="home-start" onClick={() => setAuthMode("signup")}>Get started <span>→</span></button></div>
       </nav>
       <section className="home-hero">
-        <div className="hero-badge"><i /> PURPOSE-BUILT FOR PARKING LOT CONTRACTORS</div>
+        <div className="hero-badge"><i /> PURPOSE-BUILT FOR PARKING LOT CONTRACTORS BY STRIPERS</div>
         <h1>From address to<br /><em>quote in minutes.</em></h1>
         <p>Measure the lot from your desk, price every stripe, and send a proposal that wins the job.</p>
       </section>

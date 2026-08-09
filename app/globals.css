@@ -131,8 +131,12 @@ button { cursor: pointer; }
 .demo-address-found.matched span { color: #8a6500; }
 .lot-canvas { min-height: 560px; position: relative; overflow: hidden; border-right: 1px solid #cdc9bd; background-color: #3d443b; background-image: linear-gradient(18deg, rgba(108,126,89,.34) 0 18%, transparent 18% 75%, rgba(67,87,62,.4) 75%), repeating-linear-gradient(90deg, rgba(255,255,255,.014) 0 1px, transparent 1px 5px), repeating-linear-gradient(0deg, rgba(0,0,0,.03) 0 1px, transparent 1px 6px); }
 .lot-canvas::before, .lot-canvas::after { content: none; }
-.demo-real-map { position: absolute !important; inset: 0; z-index: 0; min-height: 100%; filter: saturate(.88) contrast(1.08) brightness(.82); pointer-events: none; }
+.demo-real-map { position: absolute !important; inset: 0; z-index: 0; min-height: 100%; filter: saturate(.9) contrast(1.08) brightness(.9); pointer-events: none; }
+.demo-real-map.editing { pointer-events: auto; }
 .demo-real-map .leaflet-control-attribution { max-width: 72%; background: rgba(255,255,255,.75); font-size: 6px !important; }
+.demo-real-map .leaflet-interactive { transition: fill-opacity .2s ease; }
+.demo-real-map .demo-lot-tooltip { border: 0; border-radius: 0; background: var(--ink); color: var(--amber); box-shadow: 3px 3px 0 rgba(255,180,0,.82); padding: 8px 10px; font: 900 8px monospace; letter-spacing: .09em; white-space: nowrap; }
+.demo-real-map .demo-lot-tooltip::before { display: none; }
 .demo-map-label { position: absolute; z-index: 10; top: 16px; left: 17px; margin: 0; padding: 7px 9px; background: rgba(251,250,246,.94); box-shadow: 3px 3px 0 rgba(17,17,15,.5); }
 .demo-map-label b { background: var(--amber); color: var(--ink); }
 .demo-map-label span { color: var(--ink); }
@@ -151,23 +155,23 @@ button { cursor: pointer; }
 .row-three { left: 47%; top: 51%; width: 42%; }
 .ada-space { position: absolute; z-index: 4; width: 31px; height: 50px; display: grid; place-items: center; background: rgba(37,92,143,.8); color: #dcefff; border: 2px solid #c5e6ff; font: 800 7px monospace; transform: rotate(-1.7deg); }
 .ada-one { left: 54%; top: 41%; }.ada-two { left: calc(54% + 34px); top: 40.8%; }
-.lot-boundary { position: absolute; z-index: 5; top: 27%; left: 14%; width: 72%; height: 46%; border: 4px solid var(--amber); background: rgba(255,180,0,.24); clip-path: polygon(4% 12%, 91% 2%, 98% 84%, 9% 98%); opacity: 0; transform: rotate(-3deg) scale(.86); transform-origin: center; box-shadow: inset 0 0 0 1px rgba(255,255,255,.52), 0 0 24px rgba(255,180,0,.55); transition: opacity .4s ease, transform .8s cubic-bezier(.2,.8,.2,1); }
-.lot-boundary::before { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(115deg, rgba(255,255,255,.12) 0 2px, transparent 2px 15px); }
-.lot-area-label { position: absolute; z-index: 2; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(3deg); background: var(--ink); color: var(--amber); padding: 8px 10px; font: 900 8px monospace; letter-spacing: .1em; white-space: nowrap; box-shadow: 3px 3px 0 rgba(255,180,0,.85); }
-.lot-boundary i { position: absolute; width: 8px; height: 8px; background: white; border: 2px solid var(--ink); }
-.lot-boundary i:nth-child(1) { top: 10%; left: 4%; }.lot-boundary i:nth-child(2) { top: 2%; right: 8%; }.lot-boundary i:nth-child(3) { bottom: 15%; right: 2%; }.lot-boundary i:nth-child(4) { bottom: 2%; left: 8%; }
-.lot-canvas.scanning .lot-boundary, .lot-canvas.quote .lot-boundary { opacity: 1; transform: rotate(-3deg) scale(1); }
 .scan-line { position: absolute; z-index: 8; left: 0; right: 0; top: 10%; height: 3px; background: var(--amber); box-shadow: 0 0 18px 4px rgba(255,180,0,.75); animation: scanLot 2.2s ease-in-out infinite; }
 .scan-line::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 100px; background: linear-gradient(0deg, rgba(255,180,0,.16), transparent); }
 .scan-line span { position: absolute; right: 17px; top: 8px; background: var(--ink); color: var(--amber); padding: 6px 8px; font: 800 7px monospace; letter-spacing: .12em; }
 @keyframes scanLot { 0%, 100% { top: 12%; } 50% { top: 84%; } }
 .scan-hud { position: absolute; z-index: 9; top: 72px; left: 17px; right: 17px; display: flex; justify-content: space-between; color: white; font: 800 7px monospace; letter-spacing: .1em; text-shadow: 0 1px 4px #000; }
 .scan-hud span i { width: 6px; height: 6px; background: #6de889; display: inline-block; border-radius: 50%; margin-right: 5px; }
+.edit-demo-boundary { position: absolute; z-index: 10; right: 18px; bottom: 84px; border: 1px solid var(--amber); background: rgba(17,17,15,.94); color: var(--amber); padding: 10px 12px; font: 900 7px monospace; letter-spacing: .11em; }
+.lot-canvas.editing .edit-demo-boundary { background: var(--amber); color: var(--ink); }
 .map-summary { position: absolute; z-index: 9; left: 19px; bottom: 18px; display: flex; background: rgba(17,17,15,.91); border: 1px solid #494943; }
 .map-summary div { min-width: 76px; padding: 10px 12px; border-right: 1px solid #494943; display: flex; flex-direction: column; gap: 3px; }
 .map-summary div:last-child { border: 0; }
 .map-summary b { color: white; font-size: 16px; }
 .map-summary span { color: var(--amber); font: 800 6px monospace; letter-spacing: .12em; }
+.map-summary.editable div { min-width: 92px; align-items: center; }
+.map-summary.editable b { display: flex; align-items: center; gap: 7px; }
+.map-summary.editable button { width: 20px; height: 20px; display: grid; place-items: center; border: 1px solid #5f5e56; background: transparent; color: white; padding: 0; line-height: 1; }
+.map-summary.editable button:hover { border-color: var(--amber); color: var(--amber); }
 .quote-preview { background: #fbfaf6; padding: 24px 21px; opacity: .48; filter: grayscale(1); transition: opacity .5s ease, filter .5s ease, transform .5s ease; transform: translateX(5px); }
 .quote-preview.revealed { opacity: 1; filter: none; transform: translateX(0); }
 .quote-top { display: flex; justify-content: space-between; align-items: center; padding-bottom: 19px; border-bottom: 2px solid var(--ink); }
@@ -649,9 +653,11 @@ button { cursor: pointer; }
   .parking-row { width: 36%; }
   .row-two { left: 10%; }
   .row-three { left: 46%; }
-  .lot-boundary { top: 26%; left: 9%; width: 82%; height: 48%; }
   .scan-hud strong { display: none; }
-  .map-summary div { min-width: 65px; }
+  .map-summary { left: 10px; bottom: 10px; }
+  .map-summary.editable div { min-width: 72px; padding: 8px 6px; }
+  .map-summary.editable b { gap: 3px; }
+  .edit-demo-boundary { right: 10px; bottom: 94px; }
   .quote-preview { padding: 21px 16px; }
   .workflow-section { width: calc(100% - 30px); }
   .workflow-section h2 { font-size: 43px; }

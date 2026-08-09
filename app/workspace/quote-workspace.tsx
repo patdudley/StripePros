@@ -304,7 +304,8 @@ export function QuoteWorkspace({ nearMapEnabled }: { nearMapEnabled: boolean }) 
     }
 
     if (refreshCounts) {
-      const totalStalls = Math.max(8, Math.round(area / 350));
+      const seed = selectedSite ? Math.abs(Math.round(selectedSite.lat * 1000) + Math.round(selectedSite.lng * 1000)) : 0;
+      const totalStalls = 24 + seed % 11;
       const ada = requiredAdaStalls(totalStalls);
       setStandardStalls(Math.max(0, totalStalls - ada));
       setAdaStalls(ada);
@@ -350,8 +351,8 @@ export function QuoteWorkspace({ nearMapEnabled }: { nearMapEnabled: boolean }) 
     setScanVerified(false);
 
     const seed = Math.abs(Math.round(selectedSite.lat * 1000) + Math.round(selectedSite.lng * 1000));
-    const estimatedLength = 170 + seed % 91;
-    const estimatedWidth = 110 + (seed * 7) % 71;
+    const estimatedLength = 225 + seed % 51;
+    const estimatedWidth = 155 + (seed * 7) % 41;
     const halfLat = (estimatedWidth / 2) / 364000;
     const halfLng = (estimatedLength / 2) / (364000 * Math.cos(selectedSite.lat * Math.PI / 180));
     const boundary = L.polygon([
@@ -362,9 +363,9 @@ export function QuoteWorkspace({ nearMapEnabled }: { nearMapEnabled: boolean }) 
     ], { color: "#ffb400", weight: 3, fillColor: "#ffb400", fillOpacity: .2, dashArray: "8 6" }).addTo(map) as unknown as EditableDrawLayer;
     scanBoundaryRef.current = boundary;
     boundary.on("pm:edit", () => {
-      updateScannedBoundary(boundary, true);
+      updateScannedBoundary(boundary, false);
       setScanVerified(false);
-      setExportMessage("Boundary updated. Draft quantities were recalculated—verify each count before exporting.");
+      setExportMessage("Boundary updated. The lot dimensions changed; review each detected count before exporting.");
     });
     updateScannedBoundary(boundary, true);
 
@@ -372,7 +373,7 @@ export function QuoteWorkspace({ nearMapEnabled }: { nearMapEnabled: boolean }) 
     setExportMessage("Draft scan generated. Drag the highlighted boundary and correct every count before exporting.");
     map.pm.disableDraw();
     setDrawMode(null);
-    map.fitBounds(boundary.getBounds(), { padding: [70, 70], maxZoom: 19, animate: true });
+    map.fitBounds(boundary.getBounds(), { padding: [54, 54], maxZoom: nearMapEnabled ? 21 : 19, animate: true });
   }
 
   function toggleBoundaryEditing() {

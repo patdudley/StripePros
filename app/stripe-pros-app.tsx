@@ -1,12 +1,17 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import type { Map as LeafletMap } from "leaflet";
+import type { Map as LeafletMap, Polygon as LeafletPolygon } from "leaflet";
+import turfArea from "@turf/area";
 import { PRICE_UNITS, UNIT_LABELS, type PriceUnit } from "@/lib/price-book";
 
 type User = { id: string; email: string; companyName: string };
 type GeocodeResult = { label: string; lat: number; lng: number };
 type AddressSuggestion = GeocodeResult & { primary: string; secondary: string };
+type DemoBoundary = LeafletPolygon & {
+  pm: { enable(options?: Record<string, unknown>): void; disable(): void };
+  toGeoJSON(): Parameters<typeof turfArea>[0];
+};
 type PriceItem = {
   id: string;
   name: string;
@@ -72,6 +77,9 @@ function AuthModal({ onAuthenticated, onClose, initialMode }: { onAuthenticated:
 function ProductDemo() {
   const demoMapElementRef = useRef<HTMLDivElement>(null);
   const demoMapRef = useRef<LeafletMap | null>(null);
+  const demoLeafletRef = useRef<typeof import("leaflet") | null>(null);
+  const demoBoundaryRef = useRef<DemoBoundary | null>(null);
+  const demoScanZoomRef = useRef(19);
   const [phase, setPhase] = useState<"typing" | "scanning" | "quote">("typing");
   const [address, setAddress] = useState("");
   const [selectedSite, setSelectedSite] = useState<GeocodeResult | null>(null);
@@ -80,6 +88,10 @@ function ProductDemo() {
   const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
   const [suggesting, setSuggesting] = useState(false);
   const [activeSuggestion, setActiveSuggestion] = useState(-1);
+  const [imageryProvider, setImageryProvider] = useState<"esri" | "nearmap">("esri");
+  const [boundaryEditing, setBoundaryEditing] = useState(false);
+  const [lotArea, setLotArea] = useState(0);
+  const [draftCounts, setDraftCounts] = useState({ stalls: 0, ada: 0, arrows: 0, curb: 0 });
   const suppressSuggestionsRef = useRef(false);
 
   useEffect(() => {
@@ -89,6 +101,9 @@ function ProductDemo() {
     void (async () => {
       const L = await import("leaflet");
       if (!active || !demoMapElementRef.current) return;
+      demoLeafletRef.current = L;
+      (window as unknown as { L: typeof L }).L = L;
+      await import("@geoman-io/leaflet-geoman-free");
       map = L.map(demoMapElementRef.current, { center: [32.7849, -117.1258], zoom: 18, zoomControl: false, attributionControl: true, dragging: false, scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false, touchZoom: false });
       demoMapRef.current = map;
       let tileUrl = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
@@ -97,11 +112,11 @@ function ProductDemo() {
       try {
         const response = await fetch("/api/map-config");
         const config = await response.json() as { provider?: string; tileUrl?: string };
-        if (config.provider === "nearmap" && config.tileUrl) { tileUrl = config.tileUrl; attribution = "Aerial imagery © Nearmap"; maxZoom = 22; }
+        if (config.provider === "nearmap" && config.tileUrl) { tileUrl = config.tileUrl; attribution = "Aerial imagery © Nearmap"; maxZoom = 22; demoScanZoomRef.current = 21; setImageryProvider("nearmap"); }
       } catch { /* retain Esri aerial imagery */ }
       L.tileLayer(tileUrl, { maxZoom, crossOrigin: "anonymous", attribution }).addTo(map);
     })();
-    return () => { active = false; map?.remove(); demoMapRef.current = null; };
+    return () => { active = false; map?.remove(); demoMapRef.current = null; demoLeafletRef.current = null; demoBoundaryRef.current = null; };
   }, []);
 
   useEffect(() => {
@@ -142,7 +157,69 @@ function ProductDemo() {
     setSelectedSite(null);
     setSearchError("");
     setSuggestions([]);
+    setBoundaryEditing(false);
+    setLotArea(0);
+    setDraftCounts({ stalls: 0, ada: 0, arrows: 0, curb: 0 });
+    if (demoBoundaryRef.current) demoMapRef.current?.removeLayer(demoBoundaryRef.current);
+    demoBoundaryRef.current = null;
     demoMapRef.current?.flyTo([32.7849, -117.1258], 18, { duration: .8 });
+  }
+
+  function updateDemoBoundary(boundary: DemoBoundary, initializeCounts = false, countSite = selectedSite) {
+    const map = demoMapRef.current;
+    if (!map) return;
+    const area = turfArea(boundary.toGeoJSON()) * 10.7639;
+    const bounds = boundary.getBounds();
+    const perimeter = 2 * (map.distance(bounds.getNorthWest(), bounds.getNorthEast()) + map.distance(bounds.getNorthWest(), bounds.getSouthWest())) * 3.28084;
+    setLotArea(area);
+    boundary.setTooltipContent(`${Math.round(area).toLocaleString("en-US")} SQ FT · DRAFT OUTLINE`);
+    setDraftCounts((current) => {
+      if (!initializeCounts) return { ...current, curb: Math.max(0, Math.round(perimeter)) };
+      const seed = countSite ? Math.abs(Math.round(countSite.lat * 1000) + Math.round(countSite.lng * 1000)) : 0;
+      const stalls = 24 + seed % 11;
+      const ada = stalls <= 25 ? 1 : 2;
+      return { stalls, ada, arrows: Math.max(1, Math.round(stalls / 16)), curb: Math.max(0, Math.round(perimeter)) };
+    });
+  }
+
+  function createDemoBoundary(site: GeocodeResult) {
+    const L = demoLeafletRef.current;
+    const map = demoMapRef.current;
+    if (!L || !map) return;
+    if (demoBoundaryRef.current) map.removeLayer(demoBoundaryRef.current);
+    const halfNorthSouthFeet = 95;
+    const halfEastWestFeet = 135;
+    const halfLat = halfNorthSouthFeet / 364000;
+    const halfLng = halfEastWestFeet / (364000 * Math.cos(site.lat * Math.PI / 180));
+    const boundary = L.polygon([
+      [site.lat - halfLat, site.lng - halfLng],
+      [site.lat - halfLat, site.lng + halfLng],
+      [site.lat + halfLat, site.lng + halfLng],
+      [site.lat + halfLat, site.lng - halfLng],
+    ], { color: "#ffb400", weight: 4, fillColor: "#ffb400", fillOpacity: .22, dashArray: "10 7" }).addTo(map) as unknown as DemoBoundary;
+    boundary.bindTooltip("DRAFT OUTLINE", { permanent: true, direction: "center", className: "demo-lot-tooltip" });
+    boundary.on("pm:edit", () => updateDemoBoundary(boundary));
+    demoBoundaryRef.current = boundary;
+    updateDemoBoundary(boundary, true, site);
+    map.fitBounds(boundary.getBounds(), { padding: [34, 34], maxZoom: demoScanZoomRef.current, animate: true });
+  }
+
+  function toggleDemoBoundary() {
+    const boundary = demoBoundaryRef.current;
+    if (!boundary) return;
+    if (boundaryEditing) {
+      boundary.pm.disable();
+      boundary.setStyle({ dashArray: "10 7", fillOpacity: .22 });
+      setBoundaryEditing(false);
+    } else {
+      boundary.pm.enable({ allowSelfIntersection: false, snappable: true });
+      boundary.setStyle({ dashArray: undefined, fillOpacity: .28 });
+      setBoundaryEditing(true);
+    }
+  }
+
+  function adjustDraftCount(key: "stalls" | "ada" | "arrows", delta: number) {
+    setDraftCounts((current) => ({ ...current, [key]: Math.max(0, current[key] + delta) }));
   }
 
   function selectSuggestion(site: AddressSuggestion) {
@@ -166,7 +243,7 @@ function ProductDemo() {
       const site = selectedSite ?? result?.results[0];
       if (!site) throw new Error("We could not find that address. Try including the city and state.");
       setSelectedSite(site);
-      demoMapRef.current?.flyTo([site.lat, site.lng], 20, { duration: 1.35 });
+      createDemoBoundary(site);
       setPhase("scanning");
     } catch (caught) {
       setPhase("typing");
@@ -177,14 +254,9 @@ function ProductDemo() {
   }
 
   const mockQuote = useMemo(() => {
-    const seed = selectedSite ? Math.abs(Math.round(selectedSite.lat * 1000) + Math.round(selectedSite.lng * 1000)) : 0;
-    const stalls = 44 + seed % 57;
-    const ada = Math.max(1, Math.ceil(stalls / 50));
-    const curb = 120 + seed % 181;
-    const lotArea = (stalls + ada) * 340;
-    const total = stalls * 5 + ada * 35 + curb * 1.75 + 250;
-    return { stalls, ada, curb, lotArea, total };
-  }, [selectedSite]);
+    const total = draftCounts.stalls * 5 + draftCounts.ada * 35 + draftCounts.arrows * 15 + draftCounts.curb * 1.75 + 250;
+    return { ...draftCounts, lotArea, total };
+  }, [draftCounts, lotArea]);
 
   const propertyParts = selectedSite?.label.split(",").map((part) => part.trim()) ?? [];
   const startsWithStreetNumber = /^\d/.test(propertyParts[0] ?? "");
@@ -223,26 +295,26 @@ function ProductDemo() {
           </div>
           <div className={`demo-address-found ${selectedSite ? "matched" : ""}`}><span>{selectedSite ? "PROPERTY MATCH" : "LIVE ADDRESS DEMO"}</span><strong>{propertyName}</strong><small>{propertyLocation}</small></div>
         </div>
-          <div className={`lot-canvas demo-stage-block ${phase}`}>
-            <div ref={demoMapElementRef} className="demo-real-map" aria-label={`Aerial imagery of ${propertyName}`} />
+          <div className={`lot-canvas demo-stage-block ${phase} ${boundaryEditing ? "editing" : ""}`}>
+            <div ref={demoMapElementRef} className={`demo-real-map ${boundaryEditing ? "editing" : ""}`} aria-label={`Aerial imagery of ${propertyName}`} />
             <div className="demo-step-label demo-map-label"><b>02</b><span>SCAN THE PARKING LOT</span></div>
-            <div className="lot-boundary"><i /><i /><i /><i /><strong className="lot-area-label">{mockQuote.lotArea.toLocaleString("en-US")} SQ FT</strong></div>
             {phase === "scanning" && <div className="scan-line"><span>MEASURING SITE</span></div>}
-            {(phase === "scanning" || phase === "quote") && <div className="scan-hud"><span><i /> IMAGERY LOCKED</span><strong>{phase === "quote" ? "MEASUREMENT COMPLETE" : "SCANNING STRIPING LAYOUT"}</strong></div>}
-            {phase === "quote" && <div className="map-summary"><div><b>{mockQuote.stalls}</b><span>STALLS</span></div><div><b>{mockQuote.ada}</b><span>ADA</span></div><div><b>{mockQuote.curb}</b><span>CURB LF</span></div></div>}
+            {(phase === "scanning" || phase === "quote") && <div className="scan-hud"><span><i /> {imageryProvider === "nearmap" ? "HD NEARMAP AERIAL" : "STANDARD AERIAL · HD READY"}</span><strong>{phase === "quote" ? "DRAFT SCAN — VERIFY BELOW" : "SCANNING STRIPING LAYOUT"}</strong></div>}
+            {phase === "quote" && <><button className="edit-demo-boundary" onClick={toggleDemoBoundary}>{boundaryEditing ? "SAVE LOT OUTLINE" : "EDIT LOT OUTLINE"}</button><div className="map-summary editable"><div><span>STALLS</span><b><button onClick={() => adjustDraftCount("stalls", -1)} aria-label="Remove one stall">−</button>{mockQuote.stalls}<button onClick={() => adjustDraftCount("stalls", 1)} aria-label="Add one stall">＋</button></b></div><div><span>ADA</span><b><button onClick={() => adjustDraftCount("ada", -1)} aria-label="Remove one ADA stall">−</button>{mockQuote.ada}<button onClick={() => adjustDraftCount("ada", 1)} aria-label="Add one ADA stall">＋</button></b></div><div><span>ARROWS</span><b><button onClick={() => adjustDraftCount("arrows", -1)} aria-label="Remove one directional arrow">−</button>{mockQuote.arrows}<button onClick={() => adjustDraftCount("arrows", 1)} aria-label="Add one directional arrow">＋</button></b></div></div></>}
           </div>
           <div className={`quote-preview demo-stage-block ${phase === "quote" ? "revealed" : ""}`}>
             <div className="demo-step-label demo-quote-label"><b>03</b><span>GENERATE THE QUOTE</span></div>
-            <div className="quote-top"><span><BrandMark /> STRIPE PROS</span><b>MOCK PROPOSAL</b></div>
+            <div className="quote-top"><span><BrandMark /> STRIPE PROS</span><b>EDITABLE DRAFT</b></div>
             <div className="quote-site"><small>PREPARED FOR</small><strong>{propertyName}</strong><span>{propertyLocation}</span></div>
             <div className="quote-lines">
               <div><span>Standard stalls — restripe <small>{mockQuote.stalls} × $5.00</small></span><b>${(mockQuote.stalls * 5).toFixed(2)}</b></div>
               <div><span>ADA stalls + symbols <small>{mockQuote.ada} × $35.00</small></span><b>${(mockQuote.ada * 35).toFixed(2)}</b></div>
+              <div><span>Directional arrows <small>{mockQuote.arrows} × $15.00</small></span><b>${(mockQuote.arrows * 15).toFixed(2)}</b></div>
               <div><span>Curb paint <small>{mockQuote.curb} LF × $1.75</small></span><b>${(mockQuote.curb * 1.75).toFixed(2)}</b></div>
               <div><span>Mobilization <small>1 × $250.00</small></span><b>$250.00</b></div>
             </div>
-            <div className="quote-total"><span>MOCK TOTAL</span><strong>${mockQuote.total.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
-            <div className="quote-ready"><span>✓</span><div><b>BRANDED PDF READY</b><small>Measurements, site map & pricing included</small></div></div>
+            <div className="quote-total"><span>DRAFT TOTAL</span><strong>${mockQuote.total.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
+            <div className="quote-ready"><span>!</span><div><b>VERIFY BEFORE SENDING</b><small>Edit the lot outline and every detected count</small></div></div>
           </div>
         </div>
       </div>

@@ -349,6 +349,21 @@ button { cursor: pointer; }
 .scan-lot-cta.active { border-color: var(--amber); background: rgba(17,17,15,.95); color: #fff; }
 .scan-lot-cta.active small { color: #aaa79e; }
 .scan-lot-cta.active button { background: var(--amber); color: var(--ink); }
+.scan-lot-actions { display: grid; grid-template-columns: 1fr; min-width: 145px; }
+.scan-lot-cta > .scan-lot-actions { padding: 0; }
+.scan-lot-actions button { min-height: 33px; border: 0; border-bottom: 1px solid rgba(17,17,15,.32); background: var(--amber); color: var(--ink); padding: 0 12px; font: 900 7px Arial; letter-spacing: .08em; }
+.scan-lot-actions button:last-child { border-bottom: 0; }
+.scan-review-card { position: absolute; z-index: 850; left: 18px; bottom: 20px; width: min(360px, calc(100% - 36px)); border: 1px solid rgba(255,255,255,.28); border-top: 4px solid var(--amber); background: rgba(17,17,15,.94); padding: 12px; color: #fff; box-shadow: 0 12px 28px rgba(0,0,0,.28); backdrop-filter: blur(7px); }
+.scan-review-card header { display: flex; justify-content: space-between; align-items: center; }
+.scan-review-card header span { color: var(--amber); font: 900 7px monospace; letter-spacing: .12em; }
+.scan-review-card header b { padding: 4px 6px; background: #3d3c36; color: #d5d1c7; font: 900 6px monospace; letter-spacing: .08em; }
+.scan-review-card > div { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 10px; border: 1px solid #494841; }
+.scan-review-card > div span { display: grid; gap: 2px; padding: 8px; border-right: 1px solid #494841; }
+.scan-review-card > div span:last-child { border-right: 0; }
+.scan-review-card > div strong { font-size: 13px; }
+.scan-review-card > div small { color: #aaa79e; font: 700 5px monospace; letter-spacing: .08em; }
+.scan-review-card p { margin: 9px 0; color: #bbb8af; font-size: 7px; line-height: 1.45; }
+.scan-review-card > button { width: 100%; height: 32px; border: 0; background: var(--amber); color: var(--ink); font: 900 7px Arial; letter-spacing: .08em; }
 .site-pin { position: relative; }
 .site-pin::before { content: ""; position: absolute; left: 3px; top: 1px; width: 24px; height: 24px; transform: rotate(45deg); border: 3px solid #fff; border-radius: 50% 50% 50% 0; background: var(--amber); box-shadow: 0 3px 9px rgba(0,0,0,.42); }
 .site-pin span { position: absolute; z-index: 1; left: 11px; top: 9px; width: 8px; height: 8px; border-radius: 50%; background: var(--ink); }
@@ -380,6 +395,11 @@ button { cursor: pointer; }
 .manual-counts .panel-section-title { grid-column: 1 / -1; }
 .manual-counts label { display: grid; grid-template-columns: 1fr 47px; align-items: center; gap: 5px; border: 1px solid #dad6cd; background: #fff; padding: 6px 7px; color: #6a6760; font-size: 8px; }
 .manual-counts input { width: 100%; height: 25px; border: 1px solid #ccc8bf; text-align: center; font-size: 10px; font-weight: 900; }
+.count-adjuster { min-height: 42px; display: grid; grid-template-columns: minmax(0, 1fr) 105px; align-items: center; gap: 6px; border: 1px solid #dad6cd; background: #fff; padding: 5px 6px 5px 8px; color: #5f5c55; font-size: 8px; }
+.count-adjuster > div { height: 28px; display: grid; grid-template-columns: 28px 1fr 28px; }
+.count-adjuster button { border: 1px solid #cbc7be; background: #efede7; color: var(--ink); font-size: 12px; font-weight: 900; }
+.count-adjuster input { min-width: 0; height: 28px; border-right: 0; border-left: 0; }
+.quote-header-actions button:disabled { cursor: not-allowed; opacity: .45; }
 .empty-measurements { display: flex; align-items: center; gap: 10px; padding: 10px; background: #eeece6; color: #79766e; }
 .empty-measurements b { color: var(--amber); font-size: 18px; }
 .empty-measurements span { font-size: 8px; line-height: 1.4; }
@@ -642,6 +662,10 @@ button { cursor: pointer; }
   .scan-lot-cta > span { display: none; }
   .scan-lot-cta > div { padding: 10px 12px; }
   .scan-lot-cta button { min-width: 125px; padding: 0 10px; font-size: 7px; }
+  .scan-lot-cta .scan-lot-actions { padding: 0; }
+  .scan-lot-actions button { min-width: 112px; }
+  .scan-review-card { left: 13px; bottom: 13px; width: calc(100% - 26px); }
+  .scan-review-card > div span { padding: 6px; }
   .assist-banner { bottom: 14px; }
   .manual-counts { grid-template-columns: 1fr; }
   .manual-counts .panel-section-title { grid-column: 1; }

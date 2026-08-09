@@ -166,7 +166,7 @@ function ProductDemo() {
       const site = selectedSite ?? result?.results[0];
       if (!site) throw new Error("We could not find that address. Try including the city and state.");
       setSelectedSite(site);
-      demoMapRef.current?.flyTo([site.lat, site.lng], 18, { duration: 1.25 });
+      demoMapRef.current?.flyTo([site.lat, site.lng], 20, { duration: 1.35 });
       setPhase("scanning");
     } catch (caught) {
       setPhase("typing");
@@ -181,8 +181,9 @@ function ProductDemo() {
     const stalls = 44 + seed % 57;
     const ada = Math.max(1, Math.ceil(stalls / 50));
     const curb = 120 + seed % 181;
+    const lotArea = (stalls + ada) * 340;
     const total = stalls * 5 + ada * 35 + curb * 1.75 + 250;
-    return { stalls, ada, curb, total };
+    return { stalls, ada, curb, lotArea, total };
   }, [selectedSite]);
 
   const propertyParts = selectedSite?.label.split(",").map((part) => part.trim()) ?? [];
@@ -225,7 +226,7 @@ function ProductDemo() {
           <div className={`lot-canvas demo-stage-block ${phase}`}>
             <div ref={demoMapElementRef} className="demo-real-map" aria-label={`Aerial imagery of ${propertyName}`} />
             <div className="demo-step-label demo-map-label"><b>02</b><span>SCAN THE PARKING LOT</span></div>
-            <div className="lot-boundary"><i /><i /><i /><i /></div>
+            <div className="lot-boundary"><i /><i /><i /><i /><strong className="lot-area-label">{mockQuote.lotArea.toLocaleString("en-US")} SQ FT</strong></div>
             {phase === "scanning" && <div className="scan-line"><span>MEASURING SITE</span></div>}
             {(phase === "scanning" || phase === "quote") && <div className="scan-hud"><span><i /> IMAGERY LOCKED</span><strong>{phase === "quote" ? "MEASUREMENT COMPLETE" : "SCANNING STRIPING LAYOUT"}</strong></div>}
             {phase === "quote" && <div className="map-summary"><div><b>{mockQuote.stalls}</b><span>STALLS</span></div><div><b>{mockQuote.ada}</b><span>ADA</span></div><div><b>{mockQuote.curb}</b><span>CURB LF</span></div></div>}

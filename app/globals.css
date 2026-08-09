@@ -151,11 +151,12 @@ button { cursor: pointer; }
 .row-three { left: 47%; top: 51%; width: 42%; }
 .ada-space { position: absolute; z-index: 4; width: 31px; height: 50px; display: grid; place-items: center; background: rgba(37,92,143,.8); color: #dcefff; border: 2px solid #c5e6ff; font: 800 7px monospace; transform: rotate(-1.7deg); }
 .ada-one { left: 54%; top: 41%; }.ada-two { left: calc(54% + 34px); top: 40.8%; }
-.lot-boundary { position: absolute; z-index: 5; inset: 45px 50px 88px 45px; border: 3px solid var(--amber); clip-path: polygon(5% 8%, 92% 1%, 98% 83%, 7% 98%); opacity: 0; transition: opacity .4s ease; }
-.lot-boundary::after { content: "42,680 SQ FT"; position: absolute; left: 43%; top: 44%; background: var(--ink); color: var(--amber); padding: 7px 9px; font: 800 8px monospace; letter-spacing: .1em; }
+.lot-boundary { position: absolute; z-index: 5; top: 27%; left: 14%; width: 72%; height: 46%; border: 4px solid var(--amber); background: rgba(255,180,0,.24); clip-path: polygon(4% 12%, 91% 2%, 98% 84%, 9% 98%); opacity: 0; transform: rotate(-3deg) scale(.86); transform-origin: center; box-shadow: inset 0 0 0 1px rgba(255,255,255,.52), 0 0 24px rgba(255,180,0,.55); transition: opacity .4s ease, transform .8s cubic-bezier(.2,.8,.2,1); }
+.lot-boundary::before { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(115deg, rgba(255,255,255,.12) 0 2px, transparent 2px 15px); }
+.lot-area-label { position: absolute; z-index: 2; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(3deg); background: var(--ink); color: var(--amber); padding: 8px 10px; font: 900 8px monospace; letter-spacing: .1em; white-space: nowrap; box-shadow: 3px 3px 0 rgba(255,180,0,.85); }
 .lot-boundary i { position: absolute; width: 8px; height: 8px; background: white; border: 2px solid var(--ink); }
-.lot-boundary i:nth-child(1) { top: 7%; left: 5%; }.lot-boundary i:nth-child(2) { top: 1%; right: 7%; }.lot-boundary i:nth-child(3) { bottom: 16%; right: 1%; }.lot-boundary i:nth-child(4) { bottom: 1%; left: 6%; }
-.lot-canvas.scanning .lot-boundary, .lot-canvas.quote .lot-boundary { opacity: 1; }
+.lot-boundary i:nth-child(1) { top: 10%; left: 4%; }.lot-boundary i:nth-child(2) { top: 2%; right: 8%; }.lot-boundary i:nth-child(3) { bottom: 15%; right: 2%; }.lot-boundary i:nth-child(4) { bottom: 2%; left: 8%; }
+.lot-canvas.scanning .lot-boundary, .lot-canvas.quote .lot-boundary { opacity: 1; transform: rotate(-3deg) scale(1); }
 .scan-line { position: absolute; z-index: 8; left: 0; right: 0; top: 10%; height: 3px; background: var(--amber); box-shadow: 0 0 18px 4px rgba(255,180,0,.75); animation: scanLot 2.2s ease-in-out infinite; }
 .scan-line::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 100px; background: linear-gradient(0deg, rgba(255,180,0,.16), transparent); }
 .scan-line span { position: absolute; right: 17px; top: 8px; background: var(--ink); color: var(--amber); padding: 6px 8px; font: 800 7px monospace; letter-spacing: .12em; }
@@ -648,7 +649,7 @@ button { cursor: pointer; }
   .parking-row { width: 36%; }
   .row-two { left: 10%; }
   .row-three { left: 46%; }
-  .lot-boundary { inset: 30px 20px 66px 18px; }
+  .lot-boundary { top: 26%; left: 9%; width: 82%; height: 48%; }
   .scan-hud strong { display: none; }
   .map-summary div { min-width: 65px; }
   .quote-preview { padding: 21px 16px; }

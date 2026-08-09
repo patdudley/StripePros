@@ -29,7 +29,7 @@ type QuoteItem = {
 
 type GeocodeResult = { label: string; lat: number; lng: number };
 type MapImageryConfig = {
-  provider: "esri" | "nearmap";
+  provider: "esri" | "mapbox" | "nearmap";
   tileUrl: string;
   maxZoom: number;
   coverageStatus: "available" | "unchecked" | "unconfigured" | "unavailable" | "error";
@@ -116,7 +116,7 @@ const SAN_DIEGO_LOT = {
   center: [32.7849, -117.1258] as [number, number],
 };
 
-export function QuoteWorkspace({ nearMapEnabled }: { nearMapEnabled: boolean }) {
+export function QuoteWorkspace() {
   const mapElementRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const baseLayerRef = useRef<TileLayer | null>(null);
@@ -127,7 +127,7 @@ export function QuoteWorkspace({ nearMapEnabled }: { nearMapEnabled: boolean }) 
   const scanBoundaryMeasurementIdRef = useRef<string | null>(null);
   const [drawMode, setDrawMode] = useState<DrawMode | null>(null);
   const [mapStyle, setMapStyle] = useState<"aerial" | "street">("aerial");
-  const [imageryInfo, setImageryInfo] = useState({ provider: "esri" as "esri" | "nearmap", label: "ESRI STANDARD AERIAL", detail: "NEARMAP READY", maxZoom: 19 });
+  const [imageryInfo, setImageryInfo] = useState({ provider: "esri" as "esri" | "mapbox" | "nearmap", label: "ESRI STANDARD AERIAL", detail: "MAPBOX READY", maxZoom: 19 });
   const [view, setView] = useState<"takeoff" | "saved" | "customers" | "integrations">("takeoff");
   const [address, setAddress] = useState(SAN_DIEGO_LOT.address);
   const [siteAddress, setSiteAddress] = useState(SAN_DIEGO_LOT.address);
@@ -191,7 +191,7 @@ export function QuoteWorkspace({ nearMapEnabled }: { nearMapEnabled: boolean }) 
         pane: "overlayPane",
       }).addTo(map) as TileLayer;
 
-      if (nearMapEnabled) await loadAerialImagery();
+      await loadAerialImagery();
 
       L.marker(SAN_DIEGO_LOT.center, {
         icon: L.divIcon({ className: "site-pin", html: "<span></span>", iconSize: [30, 38], iconAnchor: [15, 36] }),
@@ -225,7 +225,7 @@ export function QuoteWorkspace({ nearMapEnabled }: { nearMapEnabled: boolean }) 
       map?.remove();
       mapRef.current = null;
     };
-  }, [nearMapEnabled]);
+  }, []);
 
   async function loadAerialImagery(site?: GeocodeResult) {
     const map = mapRef.current;
@@ -240,20 +240,22 @@ export function QuoteWorkspace({ nearMapEnabled }: { nearMapEnabled: boolean }) 
         maxZoom: config.maxZoom,
         maxNativeZoom: config.maxZoom,
         crossOrigin: "anonymous",
-        attribution: config.provider === "nearmap" ? "Aerial imagery © Nearmap" : "Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+        attribution: config.provider === "nearmap" ? "Aerial imagery © Nearmap" : config.provider === "mapbox" ? "Imagery © Mapbox" : "Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community",
       }).addTo(map) as TileLayer;
       if (baseLayerRef.current) map.removeLayer(baseLayerRef.current);
       baseLayerRef.current = nextLayer;
       if (labelLayerRef.current) {
-        if (config.provider === "nearmap" && map.hasLayer(labelLayerRef.current)) map.removeLayer(labelLayerRef.current);
+        if (config.provider !== "esri" && map.hasLayer(labelLayerRef.current)) map.removeLayer(labelLayerRef.current);
         if (config.provider === "esri" && !map.hasLayer(labelLayerRef.current)) labelLayerRef.current.addTo(map);
       }
-      if (config.provider === "nearmap") {
+      if (config.provider === "mapbox") {
+        setImageryInfo({ provider: "mapbox", label: "MAPBOX SATELLITE HD", detail: "HIGH-DPI AERIAL · UP TO Z21", maxZoom: config.maxZoom });
+      } else if (config.provider === "nearmap") {
         const captured = config.captureDate ? new Date(`${config.captureDate}T12:00:00`).toLocaleDateString("en-US", { month: "short", year: "numeric" }).toUpperCase() : "LATEST SURVEY";
         const resolution = config.resolutionCm ? `${config.resolutionCm} CM/PIXEL` : `NATIVE Z${config.maxZoom}`;
         setImageryInfo({ provider: "nearmap", label: "NEARMAP VERTICAL HD", detail: `${captured} · ${resolution}`, maxZoom: config.maxZoom });
       } else {
-        const detail = config.coverageStatus === "unavailable" ? "NO NEARMAP COVERAGE" : config.coverageStatus === "error" ? "HD SERVICE UNAVAILABLE" : "NEARMAP READY";
+        const detail = config.coverageStatus === "unavailable" ? "NO PREMIUM COVERAGE" : config.coverageStatus === "error" ? "HD SERVICE UNAVAILABLE" : "MAPBOX READY";
         setImageryInfo({ provider: "esri", label: "ESRI STANDARD AERIAL", detail, maxZoom: 19 });
       }
     } catch { /* retain the current imagery layer */ }
@@ -586,7 +588,7 @@ export function QuoteWorkspace({ nearMapEnabled }: { nearMapEnabled: boolean }) 
       {view === "takeoff" && <section className="takeoff-main">
         <div className="takeoff-toolbar">
           <form onSubmit={searchAddress} className="workspace-address-search"><span>⌕</span><input value={address} onChange={(event) => { setAddress(event.target.value); setScanState("idle"); setSelectedSite(null); }} aria-label="Property address" /><button disabled={searching}>{searching ? "SEARCHING…" : "FIND LOT"}</button></form>
-          <div className={`imagery-chip ${imageryInfo.provider === "nearmap" ? "hd" : ""}`}><i /> {imageryInfo.label} <span>{imageryInfo.detail}</span></div>
+          <div className={`imagery-chip ${imageryInfo.provider !== "esri" ? "hd" : ""}`}><i /> {imageryInfo.label} <span>{imageryInfo.detail}</span></div>
           {results.length > 1 && <div className="address-results">{results.map((result) => <button key={`${result.lat}-${result.lng}`} onClick={() => selectAddress(result)}>{result.label}</button>)}</div>}
           {searchError && <p className="workspace-error">{searchError}</p>}
         </div>

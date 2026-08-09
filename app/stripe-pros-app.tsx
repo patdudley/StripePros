@@ -9,7 +9,7 @@ type User = { id: string; email: string; companyName: string };
 type GeocodeResult = { label: string; lat: number; lng: number };
 type AddressSuggestion = GeocodeResult & { primary: string; secondary: string };
 type MapImageryConfig = {
-  provider: "esri" | "nearmap";
+  provider: "esri" | "mapbox" | "nearmap";
   tileUrl: string;
   maxZoom: number;
   coverageStatus: "available" | "unchecked" | "unconfigured" | "unavailable" | "error";
@@ -134,12 +134,14 @@ function ProductDemo() {
         maxZoom: config.maxZoom,
         maxNativeZoom: config.maxZoom,
         crossOrigin: "anonymous",
-        attribution: config.provider === "nearmap" ? "Aerial imagery © Nearmap" : "Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+        attribution: config.provider === "nearmap" ? "Aerial imagery © Nearmap" : config.provider === "mapbox" ? "Imagery © Mapbox" : "Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community",
       }).addTo(map) as TileLayer;
       if (demoTileLayerRef.current) map.removeLayer(demoTileLayerRef.current);
       demoTileLayerRef.current = nextLayer;
       demoScanZoomRef.current = config.maxZoom;
-      if (config.provider === "nearmap") {
+      if (config.provider === "mapbox") {
+        setImageryDetail("MAPBOX SATELLITE · HIGH-DPI AERIAL");
+      } else if (config.provider === "nearmap") {
         const captured = config.captureDate ? ` · ${new Date(`${config.captureDate}T12:00:00`).toLocaleDateString("en-US", { month: "short", year: "numeric" }).toUpperCase()}` : "";
         const resolution = config.resolutionCm ? ` · ${config.resolutionCm} CM/PIXEL` : "";
         setImageryDetail(`NEARMAP HD${captured}${resolution}`);

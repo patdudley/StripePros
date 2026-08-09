@@ -11,6 +11,18 @@ const ESRI_CONFIG = {
 };
 
 export async function GET(request: Request) {
+  const mapboxToken = process.env.MAPBOX_ACCESS_TOKEN?.trim();
+  if (mapboxToken) {
+    return json({
+      provider: "mapbox",
+      tileUrl: "/api/mapbox-tiles/{z}/{x}/{y}",
+      maxZoom: 21,
+      coverageStatus: "available",
+      captureDate: null,
+      resolutionCm: null,
+    });
+  }
+
   const apiKey = process.env.NEARMAP_API_KEY?.trim();
   if (!apiKey) return json(ESRI_CONFIG);
 

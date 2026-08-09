@@ -7,5 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function WorkspacePage() {
-  return <QuoteWorkspace nearMapEnabled={Boolean(process.env.NEARMAP_API_KEY?.trim())} />;
+  return <QuoteWorkspace />;
 }

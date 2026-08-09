@@ -13,6 +13,7 @@ type MapImageryConfig = {
   provider: "esri" | "mapbox" | "nearmap";
   tileUrl: string;
   maxZoom: number;
+  nativeMaxZoom?: number | null;
   coverageStatus: "available" | "unchecked" | "unconfigured" | "unavailable" | "error";
   captureDate: string | null;
   resolutionCm: number | null;
@@ -94,7 +95,7 @@ function ProductDemo() {
   const demoImagerySignatureRef = useRef(`esri:${ESRI_IMAGERY_URL}:19`);
   const demoBoundaryRef = useRef<DemoBoundary | null>(null);
   const demoScanZoomRef = useRef(19);
-  const [phase, setPhase] = useState<"typing" | "selecting" | "scanning" | "quote">("typing");
+  const [phase, setPhase] = useState<"typing" | "selecting" | "quote">("typing");
   const [address, setAddress] = useState("");
   const [selectedSite, setSelectedSite] = useState<GeocodeResult | null>(null);
   const [searching, setSearching] = useState(false);
@@ -102,7 +103,7 @@ function ProductDemo() {
   const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
   const [suggesting, setSuggesting] = useState(false);
   const [activeSuggestion, setActiveSuggestion] = useState(-1);
-  const [imageryDetail, setImageryDetail] = useState("STANDARD AERIAL · HD READY");
+  const [imageryDetail, setImageryDetail] = useState("ESRI WORLD IMAGERY · NATIVE Z19");
   const [boundaryEditing, setBoundaryEditing] = useState(false);
   const [selectingLot, setSelectingLot] = useState(false);
   const [lotArea, setLotArea] = useState(0);
@@ -137,7 +138,7 @@ function ProductDemo() {
         map.scrollWheelZoom.disable();
         map.touchZoom.disable();
         setSelectingLot(false);
-        setPhase("scanning");
+        setPhase("quote");
         map.fitBounds(boundary.getBounds(), { padding: [34, 34], maxZoom: demoScanZoomRef.current, animate: true });
       });
       await configureDemoImagery();
@@ -158,14 +159,14 @@ function ProductDemo() {
       if (signature !== demoImagerySignatureRef.current) {
         const nextLayer = L.tileLayer(config.tileUrl, {
           maxZoom: config.maxZoom,
-          maxNativeZoom: config.maxZoom,
+          ...(config.nativeMaxZoom === null ? {} : { maxNativeZoom: config.nativeMaxZoom ?? config.maxZoom }),
           crossOrigin: "anonymous",
           attribution: config.provider === "nearmap" ? "Aerial imagery © Nearmap" : config.provider === "mapbox" ? "Imagery © Mapbox" : "Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community",
         }) as TileLayer;
         const loaded = await activateTileLayer(map, nextLayer, demoTileLayerRef.current);
         if (!loaded) {
           demoScanZoomRef.current = 19;
-          setImageryDetail(`${config.provider === "mapbox" ? "MAPBOX" : "HD IMAGERY"} UNAVAILABLE · STANDARD AERIAL`);
+          setImageryDetail(`${config.provider.toUpperCase()} UNAVAILABLE · ESRI FALLBACK`);
           return;
         }
         demoTileLayerRef.current = nextLayer;
@@ -173,27 +174,20 @@ function ProductDemo() {
       }
       demoScanZoomRef.current = config.maxZoom;
       if (config.provider === "mapbox") {
-        setImageryDetail("MAPBOX SATELLITE · HIGH-DPI AERIAL");
+        setImageryDetail(`MAPBOX SATELLITE · DISPLAY Z${config.maxZoom} · NATIVE ${config.nativeMaxZoom ?? "UNREPORTED"}`);
       } else if (config.provider === "nearmap") {
         const captured = config.captureDate ? ` · ${new Date(`${config.captureDate}T12:00:00`).toLocaleDateString("en-US", { month: "short", year: "numeric" }).toUpperCase()}` : "";
         const resolution = config.resolutionCm ? ` · ${config.resolutionCm} CM/PIXEL` : "";
-        setImageryDetail(`NEARMAP HD${captured}${resolution}`);
+        setImageryDetail(`NEARMAP${captured}${resolution}`);
       } else if (config.coverageStatus === "unavailable") {
-        setImageryDetail("NO NEARMAP COVERAGE · STANDARD AERIAL");
+        setImageryDetail("NO NEARMAP COVERAGE · ESRI FALLBACK");
       } else if (config.coverageStatus === "error") {
-        setImageryDetail("HD IMAGERY UNAVAILABLE · STANDARD AERIAL");
+        setImageryDetail("IMAGERY PROVIDER ERROR · ESRI FALLBACK");
       } else {
-        setImageryDetail("STANDARD AERIAL · HD READY");
+        setImageryDetail(`ESRI WORLD IMAGERY · NATIVE Z${config.nativeMaxZoom ?? 19}`);
       }
     } catch { /* retain the current imagery layer */ }
   }
-
-  useEffect(() => {
-    if (phase === "scanning") {
-      const quoteTimer = window.setTimeout(() => setPhase("quote"), 2500);
-      return () => window.clearTimeout(quoteTimer);
-    }
-  }, [phase]);
 
   useEffect(() => {
     const query = address.trim();
@@ -335,7 +329,7 @@ function ProductDemo() {
 
   return (
     <section className="product-demo" aria-label="Interactive quote workflow demonstration">
-      <div className="demo-browser-bar"><span><i /><i /><i /></span><b>NEW QUOTE // DEMO</b><small>ILLUSTRATIVE WORKFLOW</small></div>
+      <div className="demo-browser-bar"><span><i /><i /><i /></span><b>NEW QUOTE // SAMPLE WALKTHROUGH</b><small>MANUAL TAKEOFF — COUNTS START AT ZERO</small></div>
       <div className="demo-workspace">
         <div className="demo-three-blocks">
         <div className="demo-address-panel demo-stage-block">
@@ -350,7 +344,7 @@ function ProductDemo() {
               if (event.key === "Enter" && activeSuggestion >= 0) { event.preventDefault(); selectSuggestion(suggestions[activeSuggestion]); }
               if (event.key === "Escape") { setSuggestions([]); setActiveSuggestion(-1); }
             }} placeholder="Try 737 Pearl St, La Jolla, CA" autoComplete="off" />
-            <button disabled={!address.trim() || searching || phase === "selecting" || phase === "scanning"}>{searching ? "FINDING ADDRESS…" : phase === "selecting" ? "SELECT LOT ON MAP…" : phase === "scanning" ? "BUILDING DRAFT…" : "SELECT LOT"}</button>
+            <button disabled={!address.trim() || searching || phase === "selecting"}>{searching ? "FINDING ADDRESS…" : phase === "selecting" ? "SELECT LOT ON MAP…" : "SELECT LOT"}</button>
             {(suggesting || suggestions.length > 0) && <div className="demo-suggestions" id="demo-address-suggestions" role="listbox">
               {suggesting && !suggestions.length ? <span>SEARCHING ADDRESSES…</span> : suggestions.map((suggestion, index) => <button id={`demo-suggestion-${index}`} role="option" aria-selected={index === activeSuggestion} className={index === activeSuggestion ? "active" : ""} type="button" key={`${suggestion.lat}-${suggestion.lng}-${index}`} onMouseDown={(event) => event.preventDefault()} onClick={() => selectSuggestion(suggestion)}><i>⌖</i><span><strong>{suggestion.primary}</strong><small>{suggestion.secondary}</small></span></button>)}
             </div>}
@@ -359,7 +353,7 @@ function ProductDemo() {
           <div className="demo-progress" aria-live="polite">
             <span className={selectedSite ? "done" : "active"}><i>1</i> Address found</span>
             <b />
-            <span className={phase === "selecting" || phase === "scanning" ? "active" : phase === "quote" ? "done" : ""}><i>2</i> Lot selected</span>
+            <span className={phase === "selecting" ? "active" : phase === "quote" ? "done" : ""}><i>2</i> Lot selected</span>
             <b />
             <span className={phase === "quote" ? "done" : ""}><i>3</i> Quote ready</span>
           </div>
@@ -369,8 +363,7 @@ function ProductDemo() {
             <div ref={demoMapElementRef} className="demo-real-map" aria-label={`Aerial imagery of ${propertyName}`} />
             <div className="demo-step-label demo-map-label"><b>02</b><span>SELECT THE PARKING LOT</span></div>
             {phase === "selecting" && <div className="lot-selection-guide"><strong>DRAW THE LOT BOUNDARY</strong><span>Click each corner around the parking area, then click the first point again to finish.</span></div>}
-            {phase === "scanning" && <div className="scan-line"><span>MEASURING SITE</span></div>}
-            {(phase === "selecting" || phase === "scanning" || phase === "quote") && <div className="scan-hud"><span><i /> {imageryDetail}</span><strong>{phase === "selecting" ? "MANUAL LOT SELECTION" : phase === "quote" ? "MANUAL TAKEOFF — VERIFY BELOW" : "BUILDING EDITABLE DRAFT"}</strong></div>}
+            {(phase === "selecting" || phase === "quote") && <div className="scan-hud"><span><i /> {imageryDetail}</span><strong>{phase === "selecting" ? "MANUAL LOT SELECTION" : "MANUAL TAKEOFF — ENTER VISIBLE COUNTS"}</strong></div>}
             {phase === "quote" && <><button className="edit-demo-boundary" onClick={toggleDemoBoundary}>{boundaryEditing ? "SAVE LOT OUTLINE" : "EDIT LOT OUTLINE"}</button><div className="map-summary editable"><div><span>STALLS</span><b><button onClick={() => adjustDraftCount("stalls", -1)} aria-label="Remove one stall">−</button>{mockQuote.stalls}<button onClick={() => adjustDraftCount("stalls", 1)} aria-label="Add one stall">＋</button></b></div><div><span>ADA</span><b><button onClick={() => adjustDraftCount("ada", -1)} aria-label="Remove one ADA stall">−</button>{mockQuote.ada}<button onClick={() => adjustDraftCount("ada", 1)} aria-label="Add one ADA stall">＋</button></b></div><div><span>ARROWS</span><b><button onClick={() => adjustDraftCount("arrows", -1)} aria-label="Remove one directional arrow">−</button>{mockQuote.arrows}<button onClick={() => adjustDraftCount("arrows", 1)} aria-label="Add one directional arrow">＋</button></b></div></div></>}
           </div>
           <div className={`quote-preview demo-stage-block ${phase === "quote" ? "revealed" : ""}`}>

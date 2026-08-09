@@ -28,6 +28,7 @@ export type EvaluatedPrediction = {
 };
 
 export function evaluateLotPredictions(records: TrainingRecord[], predictions: LotPrediction[]) {
+  const minimumBlindSamples = 10;
   const byId = new Map(records.map((record) => [record.id, record]));
   const results: EvaluatedPrediction[] = predictions.map((prediction) => {
     const record = byId.get(prediction.recordId);
@@ -61,6 +62,9 @@ export function evaluateLotPredictions(records: TrainingRecord[], predictions: L
     results,
     summary: {
       evaluated: included.length,
+      minimumBlindSamples,
+      evaluationStatus: included.length >= minimumBlindSamples ? "ready" : "insufficient_blind_sample",
+      remainingBlindSamples: Math.max(0, minimumBlindSamples - included.length),
       stallMae: stallErrors.length ? stallErrors.reduce((sum, value) => sum + value, 0) / stallErrors.length : null,
       exactStallRate: stallErrors.length ? stallErrors.filter((value) => value === 0).length / stallErrors.length : null,
       adaMae: adaErrors.length ? adaErrors.reduce((sum, value) => sum + value, 0) / adaErrors.length : null,

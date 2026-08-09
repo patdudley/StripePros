@@ -32,10 +32,14 @@ const evaluated = results.filter((result) => result.status === "evaluated");
 const stallErrors = evaluated.map((result) => result.stallAbsoluteError);
 const adaErrors = evaluated.map((result) => result.adaAbsoluteError).filter((value) => value !== null);
 const average = (values) => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+const minimumBlindSamples = 10;
 
 console.log(JSON.stringify({
   summary: {
     evaluated: evaluated.length,
+    minimumBlindSamples,
+    evaluationStatus: evaluated.length >= minimumBlindSamples ? "ready" : "insufficient_blind_sample",
+    remainingBlindSamples: Math.max(0, minimumBlindSamples - evaluated.length),
     stallMae: average(stallErrors),
     exactStallRate: stallErrors.length ? stallErrors.filter((value) => value === 0).length / stallErrors.length : null,
     adaMae: average(adaErrors),

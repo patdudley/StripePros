@@ -1,0 +1,94 @@
+{
+  "date": "2026-08-09",
+  "method": "Address resolution and independent aerial review before proposal-label comparison",
+  "integrity": {
+    "sourceFiles": 20,
+    "uniqueParkingAddresses": 14,
+    "comparableWholeLotLabels": 5,
+    "usableCalibrationExamples": 4,
+    "genuinelyBlindEvaluations": 0,
+    "plateauReached": false,
+    "stopReason": "Insufficient unseen ground truth; additional passes would memorize the same labels rather than measure improvement."
+  },
+  "sites": [
+    {
+      "recordId": "400-s-sierra",
+      "disposition": "needs_current_boundary",
+      "reason": "The available imagery shows active or recent construction and does not establish that the historical quote covered the current parking layout."
+    },
+    {
+      "recordId": "725-n-quince",
+      "disposition": "needs_boundary",
+      "reason": "The address resolves near multiple faded and vacant paved areas; the intended work parcel is not defensible from the pin alone."
+    },
+    {
+      "recordId": "737-pearl",
+      "disposition": "calibration_only",
+      "reason": "A comparable label exists, but it was already visible and is not a valid blind holdout."
+    },
+    {
+      "recordId": "777-s-highway-101",
+      "disposition": "not_evaluable",
+      "reason": "The property is identifiable, but the proposal contains no stall quantity to score."
+    },
+    {
+      "recordId": "853-turquoise",
+      "disposition": "needs_boundary",
+      "reason": "The address is embedded in dense mixed-use parcels and the quote does not state a regular-stall quantity."
+    },
+    {
+      "recordId": "1155-e-grand",
+      "disposition": "not_evaluable",
+      "reason": "The lot is visually identifiable, but the proposal contains no stall quantity to score."
+    },
+    {
+      "recordId": "3105-el-cajon",
+      "disposition": "calibration_only",
+      "reason": "A comparable whole-lot label exists, but it was already visible and is not a valid blind holdout."
+    },
+    {
+      "recordId": "3245-el-cajon",
+      "disposition": "calibration_only",
+      "reason": "A comparable whole-lot label exists, but it was already visible and is not a valid blind holdout."
+    },
+    {
+      "recordId": "7555-pacific",
+      "disposition": "calibration_only",
+      "reason": "A comparable whole-lot label exists, but it was already visible and is not a valid blind holdout."
+    },
+    {
+      "recordId": "10605-jamacha",
+      "disposition": "partial_scope",
+      "reason": "The proposal is an ADA correction package, not a whole-lot restripe, so it cannot label the site's total stall count."
+    },
+    {
+      "recordId": "13950-milton",
+      "disposition": "needs_boundary",
+      "reason": "A comparable label exists, but the address pin does not establish which neighboring parking fields were included."
+    },
+    {
+      "recordId": "38990-midway",
+      "disposition": "partial_scope",
+      "reason": "The proposal describes painted lines and specialty markings, not a whole-lot stall count; the address context is also ambiguous."
+    },
+    {
+      "recordId": "4595-mission-bay",
+      "disposition": "partial_scope",
+      "reason": "The four-stall proposal scope covers only a small part of a much larger storage property."
+    },
+    {
+      "recordId": "4124-university-striping",
+      "disposition": "not_evaluable",
+      "reason": "The shopping-center parcel is identifiable, but neither proposal alternative states a stall quantity."
+    }
+  ],
+  "nextValidTest": {
+    "minimumExamples": 10,
+    "requirements": [
+      "A new address and user-confirmed work boundary",
+      "A hidden final count recorded by someone other than the estimator",
+      "Separate standard, ADA, access-aisle, arrow, crosswalk, and stencil labels",
+      "Prediction saved before the hidden label is revealed"
+    ]
+  }
+}

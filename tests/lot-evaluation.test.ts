@@ -13,7 +13,15 @@ describe("lot-count evaluation", () => {
       { recordId: "partial", status: "counted", standardStalls: 4, blind: true },
       { recordId: "whole", status: "counted", standardStalls: 44, adaStalls: 2, blind: false },
     ]);
-    expect(result.summary).toEqual({ evaluated: 1, stallMae: 2, exactStallRate: 0, adaMae: 1 });
+    expect(result.summary).toEqual({
+      evaluated: 1,
+      minimumBlindSamples: 10,
+      evaluationStatus: "insufficient_blind_sample",
+      remainingBlindSamples: 9,
+      stallMae: 2,
+      exactStallRate: 0,
+      adaMae: 1,
+    });
     expect(result.results.map((entry) => entry.reason)).toEqual([
       undefined,
       "not_whole_lot_ground_truth",
@@ -26,6 +34,8 @@ describe("lot-count evaluation", () => {
       { recordId: "whole", status: "needs_boundary", blind: true },
     ]);
     expect(result.summary.evaluated).toBe(0);
+    expect(result.summary.evaluationStatus).toBe("insufficient_blind_sample");
+    expect(result.summary.remainingBlindSamples).toBe(10);
     expect(result.results[0].reason).toBe("needs_boundary");
   });
 });

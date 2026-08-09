@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { Map as LeafletMap, Polygon as LeafletPolygon, TileLayer } from "leaflet";
 import turfArea from "@turf/area";
 import { PRICE_UNITS, UNIT_LABELS, type PriceUnit } from "@/lib/price-book";
+import { activateTileLayer } from "@/lib/map-imagery";
 
 type User = { id: string; email: string; companyName: string };
 type GeocodeResult = { label: string; lat: number; lng: number };
@@ -155,8 +156,13 @@ function ProductDemo() {
         maxNativeZoom: config.maxZoom,
         crossOrigin: "anonymous",
         attribution: config.provider === "nearmap" ? "Aerial imagery © Nearmap" : config.provider === "mapbox" ? "Imagery © Mapbox" : "Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community",
-      }).addTo(map) as TileLayer;
-      if (demoTileLayerRef.current) map.removeLayer(demoTileLayerRef.current);
+      }) as TileLayer;
+      const loaded = await activateTileLayer(map, nextLayer, demoTileLayerRef.current);
+      if (!loaded) {
+        demoScanZoomRef.current = 19;
+        setImageryDetail(`${config.provider === "mapbox" ? "MAPBOX" : "HD IMAGERY"} UNAVAILABLE · STANDARD AERIAL`);
+        return;
+      }
       demoTileLayerRef.current = nextLayer;
       demoScanZoomRef.current = config.maxZoom;
       if (config.provider === "mapbox") {

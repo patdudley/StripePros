@@ -8,6 +8,7 @@ import turfLength from "@turf/length";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { toPng } from "html-to-image";
 import { calculateQuote } from "@/lib/quote-math";
+import { activateTileLayer } from "@/lib/map-imagery";
 
 type Measurement = {
   id: string;
@@ -250,8 +251,13 @@ export function QuoteWorkspace() {
         maxNativeZoom: config.maxZoom,
         crossOrigin: "anonymous",
         attribution: config.provider === "nearmap" ? "Aerial imagery © Nearmap" : config.provider === "mapbox" ? "Imagery © Mapbox" : "Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community",
-      }).addTo(map) as TileLayer;
-      if (baseLayerRef.current) map.removeLayer(baseLayerRef.current);
+      }) as TileLayer;
+      const loaded = await activateTileLayer(map, nextLayer, baseLayerRef.current);
+      if (!loaded) {
+        imageryMaxZoomRef.current = 19;
+        setImageryInfo({ provider: "esri", label: "ESRI STANDARD AERIAL", detail: `${config.provider === "mapbox" ? "MAPBOX" : "HD SERVICE"} UNAVAILABLE`, maxZoom: 19 });
+        return;
+      }
       baseLayerRef.current = nextLayer;
       imageryMaxZoomRef.current = config.maxZoom;
       if (labelLayerRef.current) {

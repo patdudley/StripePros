@@ -95,7 +95,7 @@ function ProductDemo() {
   const demoImagerySignatureRef = useRef(`esri:${ESRI_IMAGERY_URL}:19`);
   const demoBoundaryRef = useRef<DemoBoundary | null>(null);
   const demoScanZoomRef = useRef(19);
-  const [phase, setPhase] = useState<"typing" | "selecting" | "quote">("typing");
+  const [phase, setPhase] = useState<"typing" | "selecting" | "scanning" | "quote">("typing");
   const [address, setAddress] = useState("");
   const [selectedSite, setSelectedSite] = useState<GeocodeResult | null>(null);
   const [searching, setSearching] = useState(false);
@@ -108,6 +108,7 @@ function ProductDemo() {
   const [selectingLot, setSelectingLot] = useState(false);
   const [lotArea, setLotArea] = useState(0);
   const [draftCounts, setDraftCounts] = useState({ stalls: 0, ada: 0, arrows: 0 });
+  const [scanStage, setScanStage] = useState(0);
   const suppressSuggestionsRef = useRef(false);
 
   useEffect(() => {
@@ -138,13 +139,27 @@ function ProductDemo() {
         map.scrollWheelZoom.disable();
         map.touchZoom.disable();
         setSelectingLot(false);
-        setPhase("quote");
+        setScanStage(0);
+        setPhase("scanning");
         map.fitBounds(boundary.getBounds(), { padding: [34, 34], maxZoom: demoScanZoomRef.current, animate: true });
       });
       await configureDemoImagery();
     })();
     return () => { active = false; map?.remove(); demoMapRef.current = null; demoLeafletRef.current = null; demoTileLayerRef.current = null; demoBoundaryRef.current = null; };
   }, []);
+
+  useEffect(() => {
+    if (phase !== "scanning") return;
+    const tracing = window.setTimeout(() => setScanStage(1), 450);
+    const markings = window.setTimeout(() => setScanStage(2), 1200);
+    const pricing = window.setTimeout(() => setScanStage(3), 1900);
+    const complete = window.setTimeout(() => {
+      const stalls = Math.max(8, Math.min(72, Math.round(lotArea / 520)));
+      setDraftCounts({ stalls, ada: stalls >= 25 ? 2 : 1, arrows: stalls >= 18 ? 2 : 1 });
+      setPhase("quote");
+    }, 2700);
+    return () => [tracing, markings, pricing, complete].forEach(window.clearTimeout);
+  }, [lotArea, phase]);
 
   async function configureDemoImagery(site?: GeocodeResult) {
     const map = demoMapRef.current;
@@ -220,10 +235,12 @@ function ProductDemo() {
     setSelectedSite(null);
     setSearchError("");
     setSuggestions([]);
+    setSuggesting(false);
     setBoundaryEditing(false);
     setSelectingLot(false);
     setLotArea(0);
     setDraftCounts({ stalls: 0, ada: 0, arrows: 0 });
+    setScanStage(0);
     if (demoBoundaryRef.current) demoMapRef.current?.removeLayer(demoBoundaryRef.current);
     demoBoundaryRef.current = null;
     (demoMapRef.current as DemoGeomanMap | null)?.pm.disableDraw();
@@ -247,6 +264,8 @@ function ProductDemo() {
     demoBoundaryRef.current = null;
     setLotArea(0);
     setDraftCounts({ stalls: 0, ada: 0, arrows: 0 });
+    setScanStage(0);
+    setSuggesting(false);
     setSelectingLot(true);
     setPhase("selecting");
     map.dragging.enable();
@@ -285,6 +304,7 @@ function ProductDemo() {
     setAddress(site.label);
     setSelectedSite(site);
     setSuggestions([]);
+    setSuggesting(false);
     setActiveSuggestion(-1);
     setSearchError("");
     demoMapRef.current?.stop();
@@ -297,6 +317,7 @@ function ProductDemo() {
     setSearching(true);
     setSearchError("");
     setSuggestions([]);
+    setSuggesting(false);
     try {
       const hadSelectedSite = Boolean(selectedSite);
       const result = hadSelectedSite ? null : await api<{ results: GeocodeResult[] }>(`/api/geocode?q=${encodeURIComponent(address)}`);
@@ -326,10 +347,11 @@ function ProductDemo() {
   const startsWithStreetNumber = /^\d/.test(propertyParts[0] ?? "");
   const propertyName = startsWithStreetNumber ? `Property at ${propertyParts.slice(0, 2).join(" ")}` : propertyParts[0] || "Your customer property";
   const propertyLocation = propertyParts.slice(startsWithStreetNumber ? 2 : 1, startsWithStreetNumber ? 5 : 4).join(", ") || "Address ready to scan";
+  const scanStageLabel = ["READING SELECTED PAVEMENT", "TRACING STALL ROWS", "CHECKING ADA + SYMBOLS", "BUILDING SAMPLE SCOPE"][scanStage];
 
   return (
     <section className="product-demo" aria-label="Interactive quote workflow demonstration">
-      <div className="demo-browser-bar"><span><i /><i /><i /></span><b>NEW QUOTE // SAMPLE WALKTHROUGH</b><small>MANUAL TAKEOFF — COUNTS START AT ZERO</small></div>
+      <div className="demo-browser-bar"><span><i /><i /><i /></span><b>NEW QUOTE // SAMPLE WALKTHROUGH</b><small>SAMPLE SCAN — VERIFY EVERY RESULT</small></div>
       <div className="demo-workspace">
         <div className="demo-three-blocks">
         <div className="demo-address-panel demo-stage-block">
@@ -344,7 +366,7 @@ function ProductDemo() {
               if (event.key === "Enter" && activeSuggestion >= 0) { event.preventDefault(); selectSuggestion(suggestions[activeSuggestion]); }
               if (event.key === "Escape") { setSuggestions([]); setActiveSuggestion(-1); }
             }} placeholder="Try 737 Pearl St, La Jolla, CA" autoComplete="off" />
-            <button disabled={!address.trim() || searching || phase === "selecting"}>{searching ? "FINDING ADDRESS…" : phase === "selecting" ? "SELECT LOT ON MAP…" : "SELECT LOT"}</button>
+            <button disabled={!address.trim() || searching || phase === "selecting" || phase === "scanning"}>{searching ? "FINDING ADDRESS…" : phase === "selecting" ? "SELECT LOT ON MAP…" : phase === "scanning" ? "SCANNING LOT…" : "SELECT LOT"}</button>
             {(suggesting || suggestions.length > 0) && <div className="demo-suggestions" id="demo-address-suggestions" role="listbox">
               {suggesting && !suggestions.length ? <span>SEARCHING ADDRESSES…</span> : suggestions.map((suggestion, index) => <button id={`demo-suggestion-${index}`} role="option" aria-selected={index === activeSuggestion} className={index === activeSuggestion ? "active" : ""} type="button" key={`${suggestion.lat}-${suggestion.lng}-${index}`} onMouseDown={(event) => event.preventDefault()} onClick={() => selectSuggestion(suggestion)}><i>⌖</i><span><strong>{suggestion.primary}</strong><small>{suggestion.secondary}</small></span></button>)}
             </div>}
@@ -353,7 +375,7 @@ function ProductDemo() {
           <div className="demo-progress" aria-live="polite">
             <span className={selectedSite ? "done" : "active"}><i>1</i> Address found</span>
             <b />
-            <span className={phase === "selecting" ? "active" : phase === "quote" ? "done" : ""}><i>2</i> Lot selected</span>
+            <span className={phase === "selecting" || phase === "scanning" ? "active" : phase === "quote" ? "done" : ""}><i>2</i> {phase === "scanning" ? "Scanning lot" : "Lot selected"}</span>
             <b />
             <span className={phase === "quote" ? "done" : ""}><i>3</i> Quote ready</span>
           </div>
@@ -363,7 +385,9 @@ function ProductDemo() {
             <div ref={demoMapElementRef} className="demo-real-map" aria-label={`Aerial imagery of ${propertyName}`} />
             <div className="demo-step-label demo-map-label"><b>02</b><span>SELECT THE PARKING LOT</span></div>
             {phase === "selecting" && <div className="lot-selection-guide"><strong>DRAW THE LOT BOUNDARY</strong><span>Click each corner around the parking area, then click the first point again to finish.</span></div>}
-            {(phase === "selecting" || phase === "quote") && <div className="scan-hud"><span><i /> {imageryDetail}</span><strong>{phase === "selecting" ? "MANUAL LOT SELECTION" : "MANUAL TAKEOFF — ENTER VISIBLE COUNTS"}</strong></div>}
+            {phase === "scanning" && <div className="scan-line"><span>{scanStageLabel}</span></div>}
+            {(phase === "selecting" || phase === "scanning" || phase === "quote") && <div className="scan-hud"><span><i /> {imageryDetail}</span><strong>{phase === "selecting" ? "MANUAL LOT SELECTION" : phase === "scanning" ? scanStageLabel : "SAMPLE AUTO-SCOPE — REVIEW BELOW"}</strong></div>}
+            {(phase === "scanning" || phase === "quote") && <div className={`sample-detection-overlay ${phase}`} aria-hidden="true"><div className="sample-stall-detections">{Array.from({ length: 12 }, (_, index) => <i key={index} />)}</div><i className="sample-ada-detection one">ADA</i><i className="sample-ada-detection two">ADA</i><i className="sample-arrow-detection one">↑</i><i className="sample-arrow-detection two">↑</i>{phase === "quote" && <b>{mockQuote.stalls + mockQuote.ada + mockQuote.arrows} SAMPLE MARKINGS FOUND</b>}</div>}
             {phase === "quote" && <><button className="edit-demo-boundary" onClick={toggleDemoBoundary}>{boundaryEditing ? "SAVE LOT OUTLINE" : "EDIT LOT OUTLINE"}</button><div className="map-summary editable"><div><span>STALLS</span><b><button onClick={() => adjustDraftCount("stalls", -1)} aria-label="Remove one stall">−</button>{mockQuote.stalls}<button onClick={() => adjustDraftCount("stalls", 1)} aria-label="Add one stall">＋</button></b></div><div><span>ADA</span><b><button onClick={() => adjustDraftCount("ada", -1)} aria-label="Remove one ADA stall">−</button>{mockQuote.ada}<button onClick={() => adjustDraftCount("ada", 1)} aria-label="Add one ADA stall">＋</button></b></div><div><span>ARROWS</span><b><button onClick={() => adjustDraftCount("arrows", -1)} aria-label="Remove one directional arrow">−</button>{mockQuote.arrows}<button onClick={() => adjustDraftCount("arrows", 1)} aria-label="Add one directional arrow">＋</button></b></div></div></>}
           </div>
           <div className={`quote-preview demo-stage-block ${phase === "quote" ? "revealed" : ""}`}>
@@ -376,7 +400,7 @@ function ProductDemo() {
               <div><span>Directional arrows <small>{mockQuote.arrows} × $15.00</small></span><b>${(mockQuote.arrows * 15).toFixed(2)}</b></div>
             </div>
             <div className="quote-total"><span>DRAFT TOTAL</span><strong>${mockQuote.total.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
-            <div className="quote-ready"><span>!</span><div><b>VERIFY BEFORE SENDING</b><small>Edit the lot outline and enter each visible marking count</small></div></div>
+            <div className="quote-ready"><span>!</span><div><b>VERIFY SAMPLE SCAN BEFORE SENDING</b><small>Edit the lot outline and correct every detected marking count</small></div></div>
           </div>
         </div>
       </div>

@@ -123,7 +123,7 @@ button { cursor: pointer; }
 .demo-address-found.matched span { color: #8a6500; }
 .lot-canvas { min-height: 560px; position: relative; overflow: hidden; border-right: 1px solid #cdc9bd; background-color: #3d443b; background-image: linear-gradient(18deg, rgba(108,126,89,.34) 0 18%, transparent 18% 75%, rgba(67,87,62,.4) 75%), repeating-linear-gradient(90deg, rgba(255,255,255,.014) 0 1px, transparent 1px 5px), repeating-linear-gradient(0deg, rgba(0,0,0,.03) 0 1px, transparent 1px 6px); }
 .lot-canvas::before, .lot-canvas::after { content: none; }
-.demo-real-map { position: absolute !important; inset: 0; z-index: 0; min-height: 100%; filter: saturate(.9) contrast(1.08) brightness(.9); pointer-events: none; }
+.demo-real-map { position: absolute !important; inset: 0; z-index: 0; min-height: 100%; pointer-events: none; }
 .lot-canvas.editing .demo-real-map { pointer-events: auto; }
 .demo-real-map .leaflet-control-attribution { max-width: 72%; background: rgba(255,255,255,.75); font-size: 6px !important; }
 .demo-real-map .leaflet-interactive { transition: fill-opacity .2s ease; }
@@ -154,19 +154,6 @@ button { cursor: pointer; }
 .lot-canvas.scanning::after { content: ""; position: absolute; z-index: 7; inset: 15% 12% 11%; border: 1px solid rgba(255,180,0,.5); background: radial-gradient(circle, rgba(255,180,0,.13), transparent 65%); pointer-events: none; animation: scanPulse 1.2s ease-in-out infinite alternate; }
 @keyframes scanPulse { from { opacity: .35; } to { opacity: .95; } }
 .sample-detection-overlay { position: absolute; z-index: 8; inset: 0; pointer-events: none; }
-.sample-stall-detections { position: absolute; left: 48%; top: 31%; width: 34%; display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; transform: rotate(-2deg); }
-.sample-stall-detections i { height: 48px; border: 2px solid var(--amber); background: rgba(255,180,0,.08); opacity: 1; }
-.sample-detection-overlay.scanning .sample-stall-detections i { animation: markingDetected 1.3s ease both infinite; }
-.sample-detection-overlay.scanning .sample-stall-detections i:nth-child(2n) { animation-delay: .14s; }
-.sample-detection-overlay.scanning .sample-stall-detections i:nth-child(3n) { animation-delay: .28s; }
-@keyframes markingDetected { 0%, 25% { opacity: 0; transform: translateY(5px); } 45%, 100% { opacity: 1; transform: translateY(0); } }
-.sample-ada-detection, .sample-arrow-detection { position: absolute; display: grid; place-items: center; font-style: normal; font-weight: 950; box-shadow: 0 2px 7px rgba(0,0,0,.3); }
-.sample-ada-detection { top: 53%; width: 34px; height: 48px; border: 2px solid #b8ddff; background: rgba(39,119,212,.82); color: white; font-size: 7px; }
-.sample-ada-detection.one { left: 51%; }.sample-ada-detection.two { left: calc(51% + 38px); }
-.sample-arrow-detection { top: 63%; width: 29px; height: 29px; border-radius: 50%; background: #74e08b; color: #111; font-size: 17px; }
-.sample-arrow-detection.one { left: 68%; }.sample-arrow-detection.two { left: 75%; }
-.sample-detection-overlay.scanning > i { animation: detectedPing 1s ease-in-out infinite alternate; }
-@keyframes detectedPing { from { opacity: .2; transform: scale(.82); } to { opacity: 1; transform: scale(1); } }
 .sample-detection-overlay > b { position: absolute; left: 50%; top: 70%; transform: translateX(-50%); min-width: max-content; border: 1px solid var(--amber); background: rgba(17,17,15,.94); color: var(--amber); padding: 8px 10px; font: 900 7px monospace; letter-spacing: .1em; }
 .scan-hud { position: absolute; z-index: 9; top: 72px; left: 17px; right: 17px; display: flex; justify-content: space-between; color: white; font: 800 7px monospace; letter-spacing: .1em; text-shadow: 0 1px 4px #000; }
 .scan-hud span i { width: 6px; height: 6px; background: #6de889; display: inline-block; border-radius: 50%; margin-right: 5px; }

@@ -121,7 +121,7 @@ function ProductDemo() {
       demoLeafletRef.current = L;
       (window as unknown as { L: typeof L }).L = L;
       await import("@geoman-io/leaflet-geoman-free");
-      map = L.map(demoMapElementRef.current, { center: [32.7849, -117.1258], zoom: 18, zoomControl: false, attributionControl: true, dragging: false, scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false, touchZoom: false });
+      map = L.map(demoMapElementRef.current, { center: [32.7849, -117.1258], zoom: 18, zoomControl: false, attributionControl: true, zoomAnimation: false, fadeAnimation: false, dragging: false, scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false, touchZoom: false });
       demoMapRef.current = map;
       demoTileLayerRef.current = L.tileLayer(ESRI_IMAGERY_URL, { maxZoom: 19, maxNativeZoom: 19, crossOrigin: "anonymous", attribution: "Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community" }).addTo(map);
       map.on("pm:create", (rawEvent) => {
@@ -141,7 +141,7 @@ function ProductDemo() {
         setSelectingLot(false);
         setScanStage(0);
         setPhase("scanning");
-        map.fitBounds(boundary.getBounds(), { padding: [34, 34], maxZoom: demoScanZoomRef.current, animate: true });
+        map.fitBounds(boundary.getBounds(), { padding: [34, 34], maxZoom: demoScanZoomRef.current, animate: false });
       });
       await configureDemoImagery();
     })();
@@ -154,8 +154,8 @@ function ProductDemo() {
     const markings = window.setTimeout(() => setScanStage(2), 1200);
     const pricing = window.setTimeout(() => setScanStage(3), 1900);
     const complete = window.setTimeout(() => {
-      const stalls = Math.max(8, Math.min(72, Math.round(lotArea / 520)));
-      setDraftCounts({ stalls, ada: stalls >= 25 ? 2 : 1, arrows: stalls >= 18 ? 2 : 1 });
+      const stalls = Math.max(8, Math.min(72, Math.round(lotArea / 495)));
+      setDraftCounts({ stalls, ada: stalls >= 25 ? 2 : 1, arrows: stalls >= 25 ? 7 : stalls >= 18 ? 2 : 1 });
       setPhase("quote");
     }, 2700);
     return () => [tracing, markings, pricing, complete].forEach(window.clearTimeout);
@@ -387,7 +387,7 @@ function ProductDemo() {
             {phase === "selecting" && <div className="lot-selection-guide"><strong>DRAW THE LOT BOUNDARY</strong><span>Click each corner around the parking area, then click the first point again to finish.</span></div>}
             {phase === "scanning" && <div className="scan-line"><span>{scanStageLabel}</span></div>}
             {(phase === "selecting" || phase === "scanning" || phase === "quote") && <div className="scan-hud"><span><i /> {imageryDetail}</span><strong>{phase === "selecting" ? "MANUAL LOT SELECTION" : phase === "scanning" ? scanStageLabel : "SAMPLE AUTO-SCOPE — REVIEW BELOW"}</strong></div>}
-            {(phase === "scanning" || phase === "quote") && <div className={`sample-detection-overlay ${phase}`} aria-hidden="true"><div className="sample-stall-detections">{Array.from({ length: 12 }, (_, index) => <i key={index} />)}</div><i className="sample-ada-detection one">ADA</i><i className="sample-ada-detection two">ADA</i><i className="sample-arrow-detection one">↑</i><i className="sample-arrow-detection two">↑</i>{phase === "quote" && <b>{mockQuote.stalls + mockQuote.ada + mockQuote.arrows} SAMPLE MARKINGS FOUND</b>}</div>}
+            {phase === "quote" && <div className="sample-detection-overlay" aria-hidden="true"><b>{mockQuote.stalls + mockQuote.ada + mockQuote.arrows} SAMPLE MARKINGS FOUND</b></div>}
             {phase === "quote" && <><button className="edit-demo-boundary" onClick={toggleDemoBoundary}>{boundaryEditing ? "SAVE LOT OUTLINE" : "EDIT LOT OUTLINE"}</button><div className="map-summary editable"><div><span>STALLS</span><b><button onClick={() => adjustDraftCount("stalls", -1)} aria-label="Remove one stall">−</button>{mockQuote.stalls}<button onClick={() => adjustDraftCount("stalls", 1)} aria-label="Add one stall">＋</button></b></div><div><span>ADA</span><b><button onClick={() => adjustDraftCount("ada", -1)} aria-label="Remove one ADA stall">−</button>{mockQuote.ada}<button onClick={() => adjustDraftCount("ada", 1)} aria-label="Add one ADA stall">＋</button></b></div><div><span>ARROWS</span><b><button onClick={() => adjustDraftCount("arrows", -1)} aria-label="Remove one directional arrow">−</button>{mockQuote.arrows}<button onClick={() => adjustDraftCount("arrows", 1)} aria-label="Add one directional arrow">＋</button></b></div></div></>}
           </div>
           <div className={`quote-preview demo-stage-block ${phase === "quote" ? "revealed" : ""}`}>

@@ -17,8 +17,8 @@ export async function GET(request: Request) {
     return json({
       provider: "mapbox",
       tileUrl: "/api/mapbox-tiles/{z}/{x}/{y}",
-      maxZoom: 21,
-      nativeMaxZoom: null,
+      maxZoom: 22,
+      nativeMaxZoom: 22,
       coverageStatus: "available",
       captureDate: null,
       resolutionCm: null,

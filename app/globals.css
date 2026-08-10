@@ -155,6 +155,14 @@ button { cursor: pointer; }
 .scan-line { position: absolute; z-index: 8; left: 0; right: 0; top: 10%; height: 3px; background: var(--amber); box-shadow: 0 0 18px 4px rgba(255,180,0,.75); animation: scanLot 2.2s ease-in-out infinite; }
 .scan-line::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 100px; background: linear-gradient(0deg, rgba(255,180,0,.16), transparent); }
 .scan-line span { position: absolute; right: 17px; top: 8px; background: var(--ink); color: var(--amber); padding: 6px 8px; font: 800 7px monospace; letter-spacing: .12em; }
+.scan-progress-panel { position: absolute; z-index: 20; left: 50%; top: 50%; width: min(340px, calc(100% - 36px)); transform: translate(-50%, -50%); display: grid; grid-template-columns: 58px 1fr; align-items: center; gap: 13px; border: 1px solid var(--amber); background: rgba(17,17,15,.94); box-shadow: 0 14px 38px rgba(0,0,0,.4); padding: 13px; color: white; }
+.scan-progress-panel > i { width: 58px; height: 58px; display: grid; place-items: center; border: 3px solid var(--amber); border-radius: 50%; color: var(--amber); font: 950 13px Arial; font-style: normal; }
+.scan-progress-panel > div { display: grid; gap: 7px; }
+.scan-progress-panel strong, .scan-progress-panel small { font-family: monospace; letter-spacing: .08em; }
+.scan-progress-panel strong { color: white; font-size: 8px; }
+.scan-progress-panel small { color: #aaa79e; font-size: 6px; line-height: 1.4; }
+.scan-progress-panel div > span, .workspace-progress-track { height: 6px; overflow: hidden; background: #3c3b35; }
+.scan-progress-panel div > span b, .workspace-progress-track b { display: block; height: 100%; background: var(--amber); transition: width .7s ease; }
 @keyframes scanLot { 0%, 100% { top: 12%; } 50% { top: 84%; } }
 .lot-canvas.scanning::after { content: ""; position: absolute; z-index: 7; inset: 15% 12% 11%; border: 1px solid rgba(255,180,0,.5); background: radial-gradient(circle, rgba(255,180,0,.13), transparent 65%); pointer-events: none; animation: scanPulse 1.2s ease-in-out infinite alternate; }
 @keyframes scanPulse { from { opacity: .35; } to { opacity: .95; } }
@@ -654,10 +662,14 @@ button { cursor: pointer; }
 .detection-status.ready { border-color: #5ca46b; background: #eff9f0; }
 .detection-status.ready i { background: #74e08b; }
 .detection-status.running i { animation: scanPulse .7s ease-in-out infinite alternate; }
+.detection-status.running i { width: 34px; height: 34px; font-size: 8px; }
+.workspace-progress-track { display: block; margin-top: 4px; }
 .detection-status.error { border-color: #c94f36; background: #fff0ed; }
 .workspace-scan-line { position: absolute; z-index: 810; inset: 0; overflow: hidden; pointer-events: none; background: rgba(255,180,0,.05); }
 .workspace-scan-line::after { content: ""; position: absolute; left: 0; right: 0; height: 3px; background: var(--amber); box-shadow: 0 0 22px 8px rgba(255,180,0,.45); animation: workspaceScan 1.5s linear infinite; }
 .workspace-scan-line span { position: absolute; top: 72px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--amber); padding: 8px 12px; font: 900 7px monospace; letter-spacing: .1em; }
+.workspace-scan-line > div { position: absolute; z-index: 2; top: 101px; left: 50%; width: min(330px, calc(100% - 40px)); height: 7px; transform: translateX(-50%); overflow: hidden; border: 1px solid var(--amber); background: rgba(17,17,15,.9); }
+.workspace-scan-line > div b { display: block; height: 100%; background: var(--amber); transition: width .7s ease; }
 @keyframes workspaceScan { from { top: 12%; } to { top: 88%; } }
 .retry-demo-scan { position: absolute; z-index: 850; right: 16px; bottom: 82px; border: 1px solid var(--amber); background: var(--ink); color: var(--amber); padding: 12px 14px; font: 900 7px monospace; letter-spacing: .08em; }
 .row-assist-panel, .typed-tools, .annotation-counters, .annotation-review-list { padding: 13px 16px; border-bottom: 1px solid #dedbd2; }

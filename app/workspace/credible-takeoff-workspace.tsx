@@ -57,6 +57,10 @@ const MAP_CLASS_NAME = "live-map";
 const ADDRESS_ZOOM = 19.5;
 const LOT_REVIEW_ZOOM = 20.25;
 
+function estimatedScanPercent(elapsedMs: number) {
+  return Math.min(94, Math.round(6 + 88 * (1 - Math.exp(-elapsedMs / 32_000))));
+}
+
 const TYPE_LABELS: Record<AnnotationType, string> = {
   standard_stall: "Standard stall",
   ada_stall: "ADA stall",
@@ -167,6 +171,7 @@ export function CredibleTakeoffWorkspace() {
   const [saved, setSaved] = useState<SavedEstimate[]>([]);
   const [exporting, setExporting] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [scanProgress, setScanProgress] = useState(0);
   const [scanConfidence, setScanConfidence] = useState<number | null>(null);
   const [scanWarnings, setScanWarnings] = useState<string[]>([]);
   const [scanError, setScanError] = useState("");
@@ -501,10 +506,13 @@ export function CredibleTakeoffWorkspace() {
     }
 
     setScanning(true);
+    setScanProgress(6);
     setScanError("");
     setScanWarnings([]);
     setCountsVerified(false);
     setMessage("AI scan running: locating visible stalls, ADA spaces, access aisles, and directional arrows…");
+    const startedAt = performance.now();
+    const progressTimer = window.setInterval(() => setScanProgress(estimatedScanPercent(performance.now() - startedAt)), 700);
     try {
       const boundaryPoints = selectedBoundary.coordinates[0].map(([lng, lat]) => [lat, lng] as [number, number]);
       map.fitBounds(boundaryPoints, { padding: [72, 72], maxZoom: Math.min(imageryInfo.maxZoom, LOT_REVIEW_ZOOM), animate: true, duration: .45 });
@@ -545,12 +553,15 @@ export function CredibleTakeoffWorkspace() {
       replaceAnnotations([...manualAnnotations, ...modelAnnotations]);
       setScanConfidence(result.confidence);
       setScanWarnings(result.warnings);
+      setScanProgress(100);
       setMessage(`${modelAnnotations.length} visible markings counted: ${result.stalls} standard stalls, ${result.ada} ADA, ${result.accessAisles} ADA paths / access aisles, ${result.arrows} arrows. Review every marker before verifying.`);
+      await new Promise((resolve) => window.setTimeout(resolve, 350));
     } catch (error) {
       const detail = error instanceof Error ? error.message : "The AI scan could not be completed.";
       setScanError(detail);
       setMessage(`${detail} Use the manual tools or retry the scan.`);
     } finally {
+      window.clearInterval(progressTimer);
       setScanning(false);
     }
   }
@@ -668,12 +679,12 @@ export function CredibleTakeoffWorkspace() {
         {Boolean(exclusions.length) && <div className="exclusion-list"><strong>EXCLUSIONS</strong>{exclusions.map((exclusion) => <div key={exclusion.id}><button className={selectedExclusionId === exclusion.id ? "selected" : ""} onClick={() => setSelectedExclusionId(exclusion.id)}>{exclusion.type.replaceAll("_", " ")}</button><button aria-label={`Delete ${exclusion.type} exclusion`} onClick={() => { setExclusions((current) => current.filter((item) => item.id !== exclusion.id)); if (selectedExclusionId === exclusion.id) setSelectedExclusionId(null); }}>×</button></div>)}</div>}
         <div className="map-history-tools"><button onClick={undo} disabled={!undoRef.current.length}>↶ UNDO</button><button onClick={redo} disabled={!redoRef.current.length}>↷ REDO</button></div>
         {drawingIntent && <div className="drawing-status">DRAWING {String(drawingIntent).replaceAll("_", " ").toUpperCase()} · CLICK MAP TO COMPLETE</div>}
-        {scanning && <div className="workspace-scan-line"><span>AI SCANNING SELECTED LOT</span></div>}
+        {scanning && <div className="workspace-scan-line"><span>AI SCANNING SELECTED LOT · {scanProgress}%</span><div><b style={{ width: `${scanProgress}%` }} /></div></div>}
         <div className="takeoff-message"><strong>{message}</strong></div>
       </div>
       <aside className="estimate-panel annotation-panel">
         <div className="estimate-panel-head"><div><p>ANNOTATION-DRIVEN QUOTE</p><h1>{currency.format(calculation.total)}</h1></div><span>{countsVerified ? "VERIFIED" : "REVIEW"}</span></div>
-        <div className={`detection-status ${scanError ? "error" : scanning ? "running" : scanConfidence !== null ? "ready" : ""}`}><i>{scanError ? "!" : scanning ? "⌁" : scanConfidence !== null ? "✓" : "AI"}</i><span><strong>{scanError ? "AI SCAN NEEDS ATTENTION" : scanning ? "COUNTING VISIBLE MARKINGS" : scanConfidence !== null ? `AI SCAN COMPLETE · ${Math.round(scanConfidence * 100)}% CONFIDENCE` : "AI SCAN READY"}</strong><small>{scanError || scanWarnings[0] || (boundary ? "Review the localized markers, then verify the counts." : "Draw the lot boundary to count visible markings.")}</small></span>{boundary && !scanning && <button onClick={() => void runAiScan()}>SCAN AGAIN</button>}</div>
+        <div className={`detection-status ${scanError ? "error" : scanning ? "running" : scanConfidence !== null ? "ready" : ""}`}><i>{scanError ? "!" : scanning ? `${scanProgress}%` : scanConfidence !== null ? "✓" : "AI"}</i><span><strong>{scanError ? "AI SCAN NEEDS ATTENTION" : scanning ? `COUNTING VISIBLE MARKINGS · ${scanProgress}%` : scanConfidence !== null ? `AI SCAN COMPLETE · ${Math.round(scanConfidence * 100)}% CONFIDENCE` : "AI SCAN READY"}</strong><small>{scanError || scanWarnings[0] || (boundary ? "Review the localized markers, then verify the counts." : "Draw the lot boundary to count visible markings.")}</small>{scanning && <em className="workspace-progress-track"><b style={{ width: `${scanProgress}%` }} /></em>}</span>{boundary && !scanning && <button onClick={() => void runAiScan()}>SCAN AGAIN</button>}</div>
         <section className="row-assist-panel">
           <div className="panel-section-title"><span>STALL ROW ASSIST</span><small>MOST ACCURATE MANUAL TOOL</small></div>
           <button className="row-baseline-button" disabled={!boundary} onClick={() => startDraw("row")}>{rowBaseline ? "REDRAW ROW BASELINE" : "CLICK ROW START + END"}</button>

@@ -48,6 +48,10 @@ const ESRI_IMAGERY_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/W
 const ADDRESS_ZOOM = 19.5;
 const LOT_REVIEW_ZOOM = 20.25;
 
+function estimatedScanPercent(elapsedMs: number) {
+  return Math.min(94, Math.round(6 + 88 * (1 - Math.exp(-elapsedMs / 32_000))));
+}
+
 async function api<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, { ...options, headers: { "Content-Type": "application/json", ...options?.headers } });
   const body = await response.json() as T & { error?: string };
@@ -128,6 +132,7 @@ function ProductDemo() {
   const [detectedCounts, setDetectedCounts] = useState<DemoCounts>(EMPTY_DEMO_COUNTS);
   const [markingTool, setMarkingToolState] = useState<DemoMarkingType | null>(null);
   const [scanStage, setScanStage] = useState(0);
+  const [scanProgress, setScanProgress] = useState(0);
   const [scanError, setScanError] = useState("");
   const [scanConfidence, setScanConfidence] = useState<number | null>(null);
   const [scanWarnings, setScanWarnings] = useState<string[]>([]);
@@ -162,6 +167,7 @@ function ProductDemo() {
         map.touchZoom.disable();
         setSelectingLot(false);
         setScanStage(0);
+        setScanProgress(6);
         setPhase("scanning");
         map.fitBounds(boundary.getBounds(), { padding: [68, 68], maxZoom: Math.min(demoScanZoomRef.current, LOT_REVIEW_ZOOM), animate: true, duration: .45 });
       });
@@ -204,6 +210,8 @@ function ProductDemo() {
     if (phase !== "scanning" || !selectedSite) return;
     const controller = new AbortController();
     const stageTimers = [450, 1200, 1900].map((delay, index) => window.setTimeout(() => setScanStage(index + 1), delay));
+    const startedAt = performance.now();
+    const progressTimer = window.setInterval(() => setScanProgress(estimatedScanPercent(performance.now() - startedAt)), 700);
 
     void (async () => {
       try {
@@ -237,6 +245,8 @@ function ProductDemo() {
           const point = map.containerPointToLatLng([detection.x * width, detection.y * height]);
           return { id: `auto-${index}-${crypto.randomUUID()}`, type: detection.type, lat: point.lat, lng: point.lng, source: "auto" };
         }));
+        setScanProgress(100);
+        await new Promise((resolve) => window.setTimeout(resolve, 350));
       } catch (caught) {
         if (controller.signal.aborted) return;
         setDetectedCounts(EMPTY_DEMO_COUNTS);
@@ -249,6 +259,7 @@ function ProductDemo() {
 
     return () => {
       controller.abort();
+      window.clearInterval(progressTimer);
       stageTimers.forEach(window.clearTimeout);
     };
   }, [phase, selectedSite]);
@@ -337,6 +348,7 @@ function ProductDemo() {
     setDetectedCounts(EMPTY_DEMO_COUNTS);
     setMarkingTool(null);
     setScanStage(0);
+    setScanProgress(0);
     setScanError("");
     setScanConfidence(null);
     setScanWarnings([]);
@@ -366,6 +378,7 @@ function ProductDemo() {
     setDetectedCounts(EMPTY_DEMO_COUNTS);
     setMarkingTool(null);
     setScanStage(0);
+    setScanProgress(0);
     setScanError("");
     setScanConfidence(null);
     setScanWarnings([]);
@@ -417,6 +430,7 @@ function ProductDemo() {
     setScanConfidence(null);
     setScanWarnings([]);
     setScanStage(0);
+    setScanProgress(6);
     setPhase("scanning");
   }
 
@@ -509,7 +523,7 @@ function ProductDemo() {
             <div ref={demoMapElementRef} className="demo-real-map" aria-label={`Aerial imagery of ${propertyName}`} />
             <div className="demo-step-label demo-map-label"><b>02</b><span>SELECT THE PARKING LOT</span></div>
             {phase === "selecting" && <div className="lot-selection-guide"><strong>DRAW THE LOT BOUNDARY</strong><span>Click each corner around the parking area, then click the first point again to finish.</span></div>}
-            {phase === "scanning" && <div className="scan-line"><span>{scanStageLabel}</span></div>}
+            {phase === "scanning" && <><div className="scan-line"><span>{scanStageLabel}</span></div><div className="scan-progress-panel" role="status" aria-live="polite"><i>{scanProgress}%</i><div><strong>ANALYZING PARKING MARKINGS</strong><span><b style={{ width: `${scanProgress}%` }} /></span><small>ESTIMATED PROGRESS · VERIFY RESULTS WHEN COMPLETE</small></div></div></>}
             {(phase === "selecting" || phase === "scanning" || phase === "quote") && <div className="scan-hud"><span><i /> {imageryDetail}</span><strong>{phase === "selecting" ? "MANUAL LOT SELECTION" : phase === "scanning" ? scanStageLabel : scanError ? "SCAN NEEDS MANUAL REVIEW" : "AI COUNT COMPLETE — REVIEW BELOW"}</strong></div>}
             {phase === "quote" && <div className="sample-detection-overlay"><b>{scanError ? "SCAN COULD NOT VERIFY MARKINGS" : `${mockQuote.stalls + mockQuote.ada + mockQuote.accessAisles + mockQuote.arrows} MARKINGS COUNTED${scanConfidence === null ? "" : ` · ${Math.round(scanConfidence * 100)}% CONFIDENCE`}`}</b><small>{scanError || scanWarnings[0] || "Review the totals and correct anything hidden or missed"}</small></div>}
             {phase === "quote" && <>

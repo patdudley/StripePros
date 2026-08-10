@@ -179,7 +179,20 @@ function scanSchema(sectionIds: string[]) {
 async function runVisionPass(apiKey: string, address: string, sections: ScanSection[], signal: AbortSignal, verificationSource?: ScanPayload) {
   const sectionGuide = sections.map((section) => ({ sectionId: section.id, boundary: section.boundary }));
   const prompt = verificationSource
-    ? `Perform a second, independent verification of a parking-lot takeoff for ${address}. The first pass JSON is below. Recount every section row-by-row from the images; correct missed or false detections rather than merely agreeing with it. Apply the strict ADA rule again: classify a stall as ada only when blue paint belonging to that stall or a legible wheelchair symbol is visible. A nearby access aisle, path of travel, curb ramp, or hatching never proves the adjacent stall is ADA. Keep paths and stalls as independent detections. Verify every solid transverse stop_bar at a stop sign or stop position independently from crosswalks and speed bumps. Overlapping images may contain the same marking, but still localize it in the clearest section. Keep every genuinely occluded or cut-off row in occludedRows for manual confirmation. Inspect the pixels immediately outside the normalized polygon as context: if the polygon edge cuts through a visible parking row or drive aisle, add an occludedRows entry whose rowId begins boundary-edge- and whose reason says which edge must be expanded. Never call a boundary-truncated scan complete. Never estimate from lot area.\nFIRST PASS:\n${JSON.stringify(verificationSource).slice(0, 45_000)}\nSECTION BOUNDARIES:\n${JSON.stringify(sectionGuide)}`
+    ? `You are the final adjudicator for a parking-lot takeoff at ${address}. The section scans below are only fallible suggestions. Independently inspect every supplied image and return one corrected whole-lot result.
+
+Complete these sweeps in order before answering:
+1. STALL ROW LEDGER: enumerate each physical parking row once, follow it end-to-end, and place exactly one detection in the geometric center of each visible space. Never place one detection near the stall entrance and another near the parked vehicle or back line for the same physical stall. Reconcile overlapping crops: a physical marking visible in two sections must appear only once, assigned to the clearest section. Check the south/bottom and west/left boundary rows explicitly.
+2. ARROW SWEEP: traverse every drive aisle end-to-end in both directions and localize every distinct painted arrow. Do not stop after the stall count.
+3. PATH SWEEP: inspect both sides of every ADA cluster, curb ramp, and sidewalk connection for blue or white diagonal hatching and paths of travel. Count access_aisle independently; a path does not make an adjacent stall ADA.
+4. OTHER MARKINGS: verify blue ADA stalls, speed bumps, and solid transverse stop_bar markings separately.
+
+Apply the strict ADA rule: classify a stall as ada only when blue paint belonging to that stall or a legible wheelchair symbol is visible. A nearby access aisle, path, curb ramp, or hatching never proves the adjacent stall is ADA. If a row is genuinely obscured, add one precise occludedRows entry instead of inventing or silently omitting spaces. Inspect immediately outside the polygon for truncated rows and use a boundary-edge- rowId when expansion is needed. Never estimate from lot area. Do not echo first-pass duplicates.
+
+FIRST PASS SUGGESTIONS:
+${JSON.stringify(verificationSource).slice(0, 45_000)}
+SECTION BOUNDARIES:
+${JSON.stringify(sectionGuide)}`
     : `Review this single focused high-resolution aerial section for ${address}. Count only pixels inside its normalized polygon: ${JSON.stringify(sectionGuide)}. First enumerate every parking row and every drive aisle. Then inspect each row from one end to the other and assign a stable rowId such as north-01 or east-02. Return one localized detection centered in every visible marking. A stall is one non-ADA parking space bounded by visible separator lines or clearly visible separator endpoints; count it even when a parked vehicle or canopy hides the stall interior, provided both boundaries are visually supported. Never derive a row count from length or lot area. ADA CLASSIFICATION IS STRICT: classify a stall as ada only when visible blue paint belongs to that stall (blue field, blue border, or blue curb directly identifying it) or a legible wheelchair accessibility symbol is visible inside it. Do not classify an ADA stall solely because an access aisle, path of travel, curb ramp, or diagonal hatching is beside it. A path can exist without an ADA stall. Count that path independently as access_aisle, and count the adjacent space as a standard stall when its separator lines are visible but no blue or wheelchair evidence is visible. Never output both stall and ada for the same space. Traverse every drive aisle from end to end and count every painted directional arrow whose arrowhead and shaft are visually supported, including repeated arrows in sequence. Count access_aisle for each clearly visible striped access aisle or path of travel, independent of whether any adjacent stall qualifies as ADA. Count stop_bar once for every clearly visible solid transverse painted stop line at a stop sign, stop stencil, driveway exit, or controlled parking-lot intersection; do not count crosswalk bars, stall end lines, curbs, shadows, pavement seams, or lane dividers as stop_bar. Count speed_bump once for each clearly visible transverse raised speed bump or speed hump spanning a drive aisle; do not confuse stop bars, crosswalks, shadows, or pavement seams with speed bumps. If the boundaries needed to verify a stall or marking are hidden by trees, deep shadows, roofs, solar canopies, or image edges, do not invent it: put that specific row in occludedRows for manual confirmation. Inspect the visible context immediately outside the polygon too. If a polygon edge cuts through or excludes a continuous visible parking row or drive aisle, add an occludedRows entry whose rowId begins boundary-edge- and state which edge the user must expand. Do not silently omit an uncertain or boundary-truncated row. Ignore buildings, curbs, islands, ordinary lane lines, crosswalk bars, and UI. Overlap with neighboring sections is expected and will be merged geographically.`;
   const content: Array<Record<string, unknown>> = [{ type: "input_text", text: prompt }];
   for (const section of sections) {
@@ -192,8 +205,8 @@ async function runVisionPass(apiKey: string, address: string, sections: ScanSect
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model: "gpt-5.6",
-      reasoning: { effort: "low" },
-      max_output_tokens: 5_000,
+      reasoning: { effort: verificationSource ? "medium" : "low" },
+      max_output_tokens: verificationSource ? 7_000 : 5_000,
       input: [{ role: "user", content }],
       text: { format: { type: "json_schema", name: verificationSource ? "parking_lot_verification" : "parking_lot_section_scan", strict: true, schema: scanSchema(sections.map((section) => section.id)) } },
     }),
@@ -224,7 +237,7 @@ export async function POST(request: Request) {
   if (sections.reduce((total, section) => total + section.image.length, 0) > MAX_TOTAL_IMAGE_LENGTH) return json({ error: "The aerial sections are too large to scan together." }, 413);
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 75_000);
+  const timeout = setTimeout(() => controller.abort(), 105_000);
   try {
     const scanStartedAt = Date.now();
     console.info("lot-scan:start", { sections: sections.length });
@@ -234,7 +247,7 @@ export async function POST(request: Request) {
       console.info("lot-scan:section", { section: section.id, durationMs: Date.now() - startedAt, detections: Array.isArray(result.detections) ? result.detections.length : 0 });
       return result;
     });
-    const verified: ScanPayload = {
+    const firstPass: ScanPayload = {
       imageUsable: scannedSections.some((section) => section.imageUsable === true),
       failureReason: scannedSections.filter((section) => section.imageUsable !== true).map((section) => section.failureReason).filter((reason): reason is string => typeof reason === "string").join(" "),
       confidence: scannedSections.reduce((total, section) => total + (Number.isFinite(Number(section.confidence)) ? Number(section.confidence) : 0), 0) / scannedSections.length,
@@ -243,6 +256,9 @@ export async function POST(request: Request) {
       detections: scannedSections.flatMap((section) => Array.isArray(section.detections) ? section.detections : []),
       occludedRows: scannedSections.flatMap((section) => Array.isArray(section.occludedRows) ? section.occludedRows : []),
     };
+    const verificationStartedAt = Date.now();
+    const verified = await runVisionPass(apiKey, address, sections, controller.signal, firstPass);
+    console.info("lot-scan:verification", { durationMs: Date.now() - verificationStartedAt, detections: Array.isArray(verified.detections) ? verified.detections.length : 0 });
     const sectionIds = new Set(sections.map((section) => section.id));
     const normalized = Array.isArray(verified.detections) ? verified.detections.map((item) => normalizeDetection(item, sectionIds)).filter((item): item is ModelDetection => Boolean(item)) : [];
     const located = normalized.flatMap((detection) => {
@@ -278,7 +294,7 @@ export async function POST(request: Request) {
       occludedRows,
       requiresManualConfirmation: occludedRows.length > 0,
       boundaryIncomplete,
-      scanPasses: 1,
+      scanPasses: 2,
       sectionsScanned: sections.length,
       detections: detections.map(({ type, confidence: detectionConfidence, lat, lng, rowId }) => ({ type, confidence: detectionConfidence, lat, lng, rowId })),
     });

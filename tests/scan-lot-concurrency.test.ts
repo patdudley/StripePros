@@ -19,7 +19,7 @@ describe("production lot-scan scheduling", () => {
     delete process.env.OPENAI_API_KEY;
   });
 
-  it("processes four focused sections in one parallel wave", async () => {
+  it("processes four focused sections in one parallel wave followed by one reconciliation call", async () => {
     process.env.OPENAI_API_KEY = "test-key";
     let active = 0;
     let peakActive = 0;
@@ -48,7 +48,7 @@ describe("production lot-scan scheduling", () => {
     const elapsed = performance.now() - startedAt;
 
     expect(response.status).toBe(200);
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
     expect(peakActive).toBe(4);
     expect(elapsed).toBeLessThan(180);
   });

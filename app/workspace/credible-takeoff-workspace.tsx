@@ -14,6 +14,7 @@ import type { AnnotationReviewStatus, AnnotationType, ExclusionType, LotExclusio
 import { ScheduleView } from "./schedule-view";
 
 type GeocodeResult = { label: string; lat: number; lng: number };
+type AddressSuggestion = GeocodeResult & { primary: string; secondary: string };
 type MapImageryConfig = {
   provider: "esri" | "google" | "mapbox" | "nearmap";
   tileUrl: string;
@@ -135,6 +136,9 @@ export function CredibleTakeoffWorkspace() {
   const [siteAddress, setSiteAddress] = useState("No property selected");
   const [selectedSite, setSelectedSite] = useState<GeocodeResult | null>(null);
   const [results, setResults] = useState<GeocodeResult[]>([]);
+  const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
+  const [suggesting, setSuggesting] = useState(false);
+  const [activeSuggestion, setActiveSuggestion] = useState(-1);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [boundary, setBoundary] = useState<PolygonGeometry | null>(null);
@@ -163,8 +167,35 @@ export function CredibleTakeoffWorkspace() {
   const [scanConfidence, setScanConfidence] = useState<number | null>(null);
   const [scanWarnings, setScanWarnings] = useState<string[]>([]);
   const [scanError, setScanError] = useState("");
+  const suppressSuggestionsRef = useRef(false);
 
   annotationsRef.current = annotations;
+
+  useEffect(() => {
+    const query = address.trim();
+    if (suppressSuggestionsRef.current) {
+      suppressSuggestionsRef.current = false;
+      return;
+    }
+    if (query.length < 3) return;
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setSuggesting(true);
+      try {
+        const response = await fetch(`/api/geocode/suggest?q=${encodeURIComponent(query)}`, { signal: controller.signal });
+        const data = await response.json() as { results?: AddressSuggestion[] };
+        setSuggestions(response.ok ? data.results ?? [] : []);
+        setActiveSuggestion(-1);
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === "AbortError")) setSuggestions([]);
+      } finally {
+        if (!controller.signal.aborted) setSuggesting(false);
+      }
+    }, 400);
+
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [address]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -406,6 +437,10 @@ export function CredibleTakeoffWorkspace() {
     event.preventDefault();
     setSearching(true); setSearchError("");
     try {
+      if (selectedSite && selectedSite.label === address) {
+        selectAddress(selectedSite);
+        return;
+      }
       const response = await fetch(`/api/geocode?q=${encodeURIComponent(address)}`);
       const data = await response.json() as { results?: GeocodeResult[]; error?: string };
       if (!response.ok || !data.results?.length) throw new Error(data.error ?? "Address not found.");
@@ -422,8 +457,10 @@ export function CredibleTakeoffWorkspace() {
   }
 
   function selectAddress(site: GeocodeResult) {
+    suppressSuggestionsRef.current = true;
     clearMapWork();
     setAddress(site.label); setSiteAddress(site.label); setSelectedSite(site); setResults([]);
+    setSuggestions([]); setSuggesting(false); setActiveSuggestion(-1); setSearchError("");
     setMessage("Address found. Draw the actual parking-lot boundary. Counts start at zero.");
     mapRef.current?.flyTo([site.lat, site.lng], 19, { duration: 1 });
     void loadAerialImagery(site);
@@ -608,7 +645,16 @@ export function CredibleTakeoffWorkspace() {
 
     {view === "takeoff" && <section className="takeoff-main">
       <div className="takeoff-toolbar">
-        <form onSubmit={searchAddress} className="workspace-address-search"><span>⌕</span><input aria-label="Property address" value={address} onChange={(event) => setAddress(event.target.value)} /><button disabled={searching}>{searching ? "SEARCHING…" : "FIND LOT"}</button></form>
+        <form onSubmit={searchAddress} className="workspace-address-search"><span>⌕</span><input aria-label="Property address" role="combobox" aria-autocomplete="list" aria-expanded={Boolean(suggestions.length)} aria-controls="workspace-address-suggestions" aria-activedescendant={activeSuggestion >= 0 ? `workspace-suggestion-${activeSuggestion}` : undefined} value={address} autoComplete="off" onChange={(event) => { setAddress(event.target.value); setSelectedSite(null); setSearchError(""); setSuggestions([]); }} onKeyDown={(event) => {
+          if (event.key === "ArrowDown" && suggestions.length) { event.preventDefault(); setActiveSuggestion((current) => Math.min(current + 1, suggestions.length - 1)); }
+          if (event.key === "ArrowUp" && suggestions.length) { event.preventDefault(); setActiveSuggestion((current) => Math.max(current - 1, 0)); }
+          if (event.key === "Enter" && activeSuggestion >= 0) { event.preventDefault(); selectAddress(suggestions[activeSuggestion]); }
+          if (event.key === "Escape") { setSuggestions([]); setActiveSuggestion(-1); }
+        }} /><button disabled={!address.trim() || searching}>{searching ? "SEARCHING…" : "FIND LOT"}</button>
+          {(suggesting || suggestions.length > 0) && <div className="workspace-address-suggestions" id="workspace-address-suggestions" role="listbox">
+            {suggesting && !suggestions.length ? <span>SEARCHING ADDRESSES…</span> : suggestions.map((suggestion, index) => <button id={`workspace-suggestion-${index}`} role="option" aria-selected={index === activeSuggestion} className={index === activeSuggestion ? "active" : ""} type="button" key={`${suggestion.lat}-${suggestion.lng}-${index}`} onMouseDown={(event) => event.preventDefault()} onClick={() => selectAddress(suggestion)}><i>⌖</i><span><strong>{suggestion.primary}</strong><small>{suggestion.secondary}</small></span></button>)}
+          </div>}
+        </form>
         <div className={`imagery-chip ${imageryInfo.provider !== "esri" ? "hd" : ""}`}><i /> {imageryInfo.provider.toUpperCase()} IMAGERY <span>{imageryInfo.detail}</span></div>
         {results.length > 1 && <div className="address-results">{results.map((result) => <button key={`${result.lat}-${result.lng}`} onClick={() => selectAddress(result)}>{result.label}</button>)}</div>}
         {searchError && <p className="workspace-error">{searchError}</p>}

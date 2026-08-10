@@ -19,12 +19,16 @@ function unique(parts: Array<string | undefined>) {
   return parts.filter((part, index, all): part is string => Boolean(part) && all.indexOf(part) === index);
 }
 
+function baseAddress(query: string) {
+  return query.replace(/(?:,?\s+)(?:#|suite\s+|ste\s+|unit\s+|apt\s+)[a-z0-9-]+(?=,|$)/i, "").replace(/\s+,/g, ",").trim();
+}
+
 export async function GET(request: Request) {
   const query = new URL(request.url).searchParams.get("q")?.trim();
   if (!query || query.length < 3) return json({ results: [] });
 
   const endpoint = new URL("https://photon.komoot.io/api");
-  endpoint.searchParams.set("q", query);
+  endpoint.searchParams.set("q", baseAddress(query));
   endpoint.searchParams.set("limit", "5");
   endpoint.searchParams.set("lang", "en");
   endpoint.searchParams.set("countrycode", "US");

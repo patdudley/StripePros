@@ -19,7 +19,7 @@ describe("production lot-scan scheduling", () => {
     delete process.env.OPENAI_API_KEY;
   });
 
-  it("processes six scout calls and six verification calls in two parallel waves", async () => {
+  it("processes four focused sections in one parallel wave", async () => {
     process.env.OPENAI_API_KEY = "test-key";
     let active = 0;
     let peakActive = 0;
@@ -34,7 +34,7 @@ describe("production lot-scan scheduling", () => {
       return new Response(JSON.stringify(modelResult(sectionId)), { status: 200, headers: { "Content-Type": "application/json" } });
     });
 
-    const sections = Array.from({ length: 6 }, (_, index) => ({
+    const sections = Array.from({ length: 4 }, (_, index) => ({
       image: "data:image/jpeg;base64,AA==",
       boundary: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }],
       viewport: { north: 33 + index * 0.001, south: 32.999 + index * 0.001, east: -117, west: -117.001 },
@@ -48,8 +48,8 @@ describe("production lot-scan scheduling", () => {
     const elapsed = performance.now() - startedAt;
 
     expect(response.status).toBe(200);
-    expect(fetchMock).toHaveBeenCalledTimes(12);
-    expect(peakActive).toBe(6);
-    expect(elapsed).toBeLessThan(250);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(peakActive).toBe(4);
+    expect(elapsed).toBeLessThan(180);
   });
 });

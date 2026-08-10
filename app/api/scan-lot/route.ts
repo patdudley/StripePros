@@ -55,7 +55,7 @@ function normalizeSections(value: unknown): ScanSection[] {
     if ((!image.startsWith("data:image/jpeg;base64,") && !image.startsWith("data:image/png;base64,")) || image.length > MAX_IMAGE_LENGTH || boundary.length < 3) return [];
     if (!Object.values(viewport).every(Number.isFinite) || viewport.north <= viewport.south || viewport.east <= viewport.west) return [];
     return [{ id: `section-${index + 1}`, image, boundary, viewport }];
-  }).slice(0, 6);
+  }).slice(0, 4);
 }
 
 function normalizeDetection(value: unknown, sectionIds: Set<string>): ModelDetection | null {
@@ -192,8 +192,8 @@ async function runVisionPass(apiKey: string, address: string, sections: ScanSect
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model: "gpt-5.6",
-      reasoning: { effort: "medium" },
-      max_output_tokens: 8_000,
+      reasoning: { effort: "low" },
+      max_output_tokens: 5_000,
       input: [{ role: "user", content }],
       text: { format: { type: "json_schema", name: verificationSource ? "parking_lot_verification" : "parking_lot_section_scan", strict: true, schema: scanSchema(sections.map((section) => section.id)) } },
     }),
@@ -224,30 +224,24 @@ export async function POST(request: Request) {
   if (sections.reduce((total, section) => total + section.image.length, 0) > MAX_TOTAL_IMAGE_LENGTH) return json({ error: "The aerial sections are too large to scan together." }, 413);
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 210_000);
+  const timeout = setTimeout(() => controller.abort(), 75_000);
   try {
     const scanStartedAt = Date.now();
     console.info("lot-scan:start", { sections: sections.length });
-    const scouts = await mapWithConcurrency(sections, sections.length, async (section) => {
+    const scannedSections = await mapWithConcurrency(sections, sections.length, async (section) => {
       const startedAt = Date.now();
       const result = await runVisionPass(apiKey, address, [section], controller.signal);
-      console.info("lot-scan:scout", { section: section.id, durationMs: Date.now() - startedAt, detections: Array.isArray(result.detections) ? result.detections.length : 0 });
-      return result;
-    });
-    const verifiedSections = await mapWithConcurrency(sections, sections.length, async (section, index) => {
-      const startedAt = Date.now();
-      const result = await runVisionPass(apiKey, address, [section], controller.signal, scouts[index]);
-      console.info("lot-scan:verify", { section: section.id, durationMs: Date.now() - startedAt, detections: Array.isArray(result.detections) ? result.detections.length : 0 });
+      console.info("lot-scan:section", { section: section.id, durationMs: Date.now() - startedAt, detections: Array.isArray(result.detections) ? result.detections.length : 0 });
       return result;
     });
     const verified: ScanPayload = {
-      imageUsable: verifiedSections.some((section) => section.imageUsable === true),
-      failureReason: verifiedSections.filter((section) => section.imageUsable !== true).map((section) => section.failureReason).filter((reason): reason is string => typeof reason === "string").join(" "),
-      confidence: verifiedSections.reduce((total, section) => total + (Number.isFinite(Number(section.confidence)) ? Number(section.confidence) : 0), 0) / verifiedSections.length,
-      summary: verifiedSections.map((section) => section.summary).filter((summary): summary is string => typeof summary === "string").join(" ").slice(0, 300),
-      warnings: verifiedSections.flatMap((section) => Array.isArray(section.warnings) ? section.warnings : []),
-      detections: verifiedSections.flatMap((section) => Array.isArray(section.detections) ? section.detections : []),
-      occludedRows: verifiedSections.flatMap((section) => Array.isArray(section.occludedRows) ? section.occludedRows : []),
+      imageUsable: scannedSections.some((section) => section.imageUsable === true),
+      failureReason: scannedSections.filter((section) => section.imageUsable !== true).map((section) => section.failureReason).filter((reason): reason is string => typeof reason === "string").join(" "),
+      confidence: scannedSections.reduce((total, section) => total + (Number.isFinite(Number(section.confidence)) ? Number(section.confidence) : 0), 0) / scannedSections.length,
+      summary: scannedSections.map((section) => section.summary).filter((summary): summary is string => typeof summary === "string").join(" ").slice(0, 300),
+      warnings: scannedSections.flatMap((section) => Array.isArray(section.warnings) ? section.warnings : []),
+      detections: scannedSections.flatMap((section) => Array.isArray(section.detections) ? section.detections : []),
+      occludedRows: scannedSections.flatMap((section) => Array.isArray(section.occludedRows) ? section.occludedRows : []),
     };
     const sectionIds = new Set(sections.map((section) => section.id));
     const normalized = Array.isArray(verified.detections) ? verified.detections.map((item) => normalizeDetection(item, sectionIds)).filter((item): item is ModelDetection => Boolean(item)) : [];
@@ -282,13 +276,13 @@ export async function POST(request: Request) {
       occludedRows,
       requiresManualConfirmation: occludedRows.length > 0,
       boundaryIncomplete,
-      scanPasses: 2,
+      scanPasses: 1,
       sectionsScanned: sections.length,
       detections: detections.map(({ type, confidence: detectionConfidence, lat, lng, rowId }) => ({ type, confidence: detectionConfidence, lat, lng, rowId })),
     });
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
-      console.error("lot-scan:timeout", { sections: sections.length, timeoutMs: 210_000 });
+      console.error("lot-scan:timeout", { sections: sections.length, timeoutMs: 75_000 });
       return json({ error: "The AI scan timed out before returning a count. No zero count was recorded—retry the scan." }, 504);
     }
     return json({ error: error instanceof Error ? `AI lot scan failed: ${error.message}` : "The AI lot scan could not be completed." }, 502);

@@ -43,7 +43,7 @@ function splitBounds(boundary: LatLng[]) {
   const longitudeSpan = Math.max((east - west) * Math.cos(((north + south) / 2) * Math.PI / 180), 0.00001);
   const vertical = latitudeSpan >= longitudeSpan;
   const aspect = Math.max(latitudeSpan, longitudeSpan) / Math.min(latitudeSpan, longitudeSpan);
-  const sectionCount = aspect >= 3 ? 6 : aspect >= 2 ? 5 : aspect >= 1.25 ? 3 : 2;
+  const sectionCount = aspect >= 3 ? 4 : aspect >= 1.5 ? 3 : 2;
   const overlap = 0.2;
   const start = vertical ? south : west;
   const end = vertical ? north : east;

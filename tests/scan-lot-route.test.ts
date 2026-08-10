@@ -38,11 +38,12 @@ describe("AI lot scan route", () => {
     expect(routeSource).toContain("detections.length === 0 && occludedRows.length > 0");
   });
 
-  it("runs a second verification pass and allows enough time for dense crops", () => {
+  it("runs focused sections in one concurrent low-latency wave", () => {
     expect(routeSource).toContain("mapWithConcurrency(sections, sections.length");
-    expect(routeSource).toContain("runVisionPass(apiKey, address, [section], controller.signal, scouts[index])");
-    expect(routeSource).toContain("210_000");
-    expect(routeSource).toContain("max_output_tokens: 8_000");
+    expect(routeSource).not.toContain("controller.signal, scouts[index]");
+    expect(routeSource).toContain("75_000");
+    expect(routeSource).toContain('reasoning: { effort: "low" }');
+    expect(routeSource).toContain("max_output_tokens: 5_000");
   });
 
   it("does not turn a production timeout into a successful zero count", () => {

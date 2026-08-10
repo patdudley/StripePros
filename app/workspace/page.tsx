@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { QuoteWorkspace } from "./quote-workspace";
+import { isAiScanningEnabled } from "@/lib/ai-scanning";
 
 export const metadata: Metadata = {
   title: "Quote Workspace — Stripe Pros",
@@ -7,5 +8,5 @@ export const metadata: Metadata = {
 };
 
 export default function WorkspacePage() {
-  return <QuoteWorkspace />;
+  return <QuoteWorkspace aiScanningEnabled={isAiScanningEnabled()} />;
 }

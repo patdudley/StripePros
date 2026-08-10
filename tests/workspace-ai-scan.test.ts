@@ -4,10 +4,11 @@ import { describe, expect, it } from "vitest";
 const workspaceSource = readFileSync(new URL("../app/workspace/credible-takeoff-workspace.tsx", import.meta.url), "utf8");
 
 describe("live workspace AI scan", () => {
-  it("starts a real scan after the lot boundary is completed", () => {
+  it("only starts a real scan after the lot boundary is completed when scanning is enabled", () => {
+    expect(workspaceSource).toContain("if (aiScanningEnabled)");
     expect(workspaceSource).toContain("window.setTimeout(() => void runAiScan(geometry)");
     expect(workspaceSource).toContain('fetch("/api/scan-lot"');
-    expect(workspaceSource).not.toContain("AUTOMATIC DETECTION NOT CONFIGURED");
+    expect(workspaceSource).toContain("Automated detection is paused pending an imagery license");
   });
 
   it("creates localized model annotations from every detection", () => {

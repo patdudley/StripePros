@@ -10,10 +10,12 @@ describe("homepage lot counting", () => {
     expect(homepageSource).not.toContain("setDraftCounts");
   });
 
-  it("uses the vision scan endpoint for every selected address", () => {
+  it("uses the vision scan endpoint only when the compliance flag is enabled", () => {
     expect(homepageSource).not.toContain("verifiedDemoCounts");
     expect(homepageSource).not.toContain('label.includes("3008")');
     expect(homepageSource).toContain('api<LotScanResult>("/api/scan-lot"');
+    expect(homepageSource).toContain("if (aiScanningEnabled)");
+    expect(homepageSource).toContain("AUTOMATED COUNTING IS PAUSED");
     expect(homepageSource).toContain("setDetectedCounts({ stalls: result.stalls, ada: result.ada, arrows: result.arrows, accessAisles: result.accessAisles, speedBumps: result.speedBumps, stopBars: result.stopBars })");
   });
 

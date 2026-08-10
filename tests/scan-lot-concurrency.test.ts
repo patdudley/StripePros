@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { POST } from "../app/api/scan-lot/route";
+import { runLicensedScanPipeline } from "../app/api/scan-lot/route";
+import { localFixtureProviderDescriptor } from "../lib/imagery/providers";
 
 const modelResult = (sectionId: string) => ({
   output_text: JSON.stringify({
@@ -18,11 +19,13 @@ describe("production lot-scan scheduling", () => {
     vi.restoreAllMocks();
     delete process.env.OPENAI_API_KEY;
     delete process.env.AI_SCANNING_ENABLED;
+    delete process.env.IMAGERY_PROVIDER;
   });
 
   it("processes four focused sections in one parallel wave followed by one reconciliation call", async () => {
     process.env.OPENAI_API_KEY = "test-key";
     process.env.AI_SCANNING_ENABLED = "true";
+    process.env.IMAGERY_PROVIDER = "local-fixture";
     let active = 0;
     let peakActive = 0;
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
@@ -42,11 +45,12 @@ describe("production lot-scan scheduling", () => {
       viewport: { north: 33 + index * 0.001, south: 32.999 + index * 0.001, east: -117, west: -117.001 },
     }));
     const startedAt = performance.now();
-    const response = await POST(new Request("http://localhost/api/scan-lot", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ address: "2605 Camino del Rio S Ste 100, San Diego, CA 92108", sections }),
-    }));
+    const response = await runLicensedScanPipeline({
+      provider: localFixtureProviderDescriptor,
+      apiKey: "test-key",
+      address: "2605 Camino del Rio S Ste 100, San Diego, CA 92108",
+      sections: sections.map((section, index) => ({ ...section, id: `section-${index + 1}` })),
+    });
     const elapsed = performance.now() - startedAt;
 
     expect(response.status).toBe(200);

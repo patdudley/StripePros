@@ -30,6 +30,7 @@ type SavedEstimate = { id: string; address: string; total: number; measurements:
 type ProviderIntegrationStatus = { configured: boolean; connected: boolean; mode: string; accountName: string | null; accountId: string | null };
 type IntegrationStatus = { providers: Record<"hubspot" | "jobber" | "quickbooks" | "onecrew" | "stripe", ProviderIntegrationStatus> };
 type LotScanResult = {
+  scanId: string;
   stalls: number;
   ada: number;
   arrows: number;
@@ -42,7 +43,17 @@ type LotScanResult = {
   requiresManualConfirmation: boolean;
   boundaryIncomplete: boolean;
   occludedRows: Array<{ sectionId: string; rowId: string; reason: string; confidence: number }>;
-  detections: Array<{ type: "stall" | "ada" | "arrow" | "access_aisle" | "speed_bump" | "stop_bar"; lat: number; lng: number; confidence: number; rowId: string }>;
+  detections: Array<{
+    type: "stall" | "ada" | "arrow" | "access_aisle" | "speed_bump" | "stop_bar";
+    lat: number;
+    lng: number;
+    confidence: number;
+    rowId: string;
+    slotIndex: number;
+    visibility: "visible" | "partially_supported";
+    evidence: string[];
+    geometry: TakeoffGeometry;
+  }>;
 };
 type DrawShape = "Polygon" | "Line" | "Marker";
 type DrawIntent = "boundary" | "exclusion" | "row" | AnnotationType | null;
@@ -513,15 +524,37 @@ export function CredibleTakeoffWorkspace() {
     setMessage(intent === "row" ? "Click the beginning and end of the stall row." : `Draw ${intent ? String(intent).replaceAll("_", " ") : "annotation"} on the map.`);
   }
 
+  function recordModelCorrection(annotation: TakeoffAnnotation, action: "geometry_edited" | "type_changed" | "status_changed" | "deleted", after: unknown) {
+    if (annotation.provenance !== "model" || !annotation.scanId || !annotation.modelDetectionId) return;
+    void fetch("/api/scan-corrections", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        scanId: annotation.scanId,
+        address: siteAddress,
+        modelDetectionId: annotation.modelDetectionId,
+        action,
+        before: annotation,
+        after,
+      }),
+    }).catch(() => undefined);
+  }
+
   function updateAnnotationGeometry(id: string, geometry: TakeoffGeometry) {
+    const existing = annotationsRef.current.find((item) => item.id === id);
+    if (existing) recordModelCorrection(existing, "geometry_edited", { ...existing, geometry, reviewStatus: "edited" });
     replaceAnnotations(annotationsRef.current.map((item) => item.id === id ? { ...item, geometry, reviewStatus: "edited" } : item));
   }
 
   function updateAnnotation(id: string, patch: Partial<TakeoffAnnotation>) {
+    const existing = annotationsRef.current.find((item) => item.id === id);
+    if (existing && (patch.type || patch.reviewStatus)) recordModelCorrection(existing, patch.type && patch.type !== existing.type ? "type_changed" : "status_changed", { ...existing, ...patch });
     replaceAnnotations(annotationsRef.current.map((item) => item.id === id ? { ...item, ...patch } : item));
   }
 
   function removeAnnotation(id: string) {
+    const existing = annotationsRef.current.find((item) => item.id === id);
+    if (existing) recordModelCorrection(existing, "deleted", null);
     replaceAnnotations(annotationsRef.current.filter((item) => item.id !== id));
     if (selectedAnnotationId === id) setSelectedAnnotationId(null);
   }
@@ -568,11 +601,15 @@ export function CredibleTakeoffWorkspace() {
         return {
           id: `model-${crypto.randomUUID()}-${index}`,
           type,
-          label: `${TYPE_LABELS[type]} ${index + 1}`,
-          geometry: { type: "Point", coordinates: [detection.lng, detection.lat] },
+          label: `${TYPE_LABELS[type]} · ${detection.rowId} #${detection.slotIndex + 1}`,
+          geometry: detection.geometry,
           provenance: "model",
-          reviewStatus: "accepted",
+          reviewStatus: detection.visibility === "partially_supported" ? "unreviewed" : "accepted",
           service,
+          scanId: result.scanId,
+          modelDetectionId: `${detection.rowId}:${detection.slotIndex}:${index}`,
+          visibility: detection.visibility,
+          evidence: detection.evidence,
         };
       });
       const manualAnnotations = annotationsRef.current.filter((annotation) => annotation.provenance !== "model");

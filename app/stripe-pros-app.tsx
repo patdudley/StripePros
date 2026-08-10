@@ -1,11 +1,12 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import type { Map as LeafletMap, Marker as LeafletMarker, Polygon as LeafletPolygon, TileLayer } from "leaflet";
+import type { Layer as LeafletLayer, Map as LeafletMap, Polygon as LeafletPolygon, TileLayer } from "leaflet";
 import turfArea from "@turf/area";
 import { PRICE_UNITS, UNIT_LABELS, type PriceUnit } from "@/lib/price-book";
 import { activateTileLayer } from "@/lib/map-imagery";
 import { captureLotScanSections } from "@/lib/lot-scan-capture";
+import type { TakeoffGeometry } from "@/lib/takeoff/types";
 
 type User = { id: string; email: string; companyName: string };
 type GeocodeResult = { label: string; lat: number; lng: number; provider?: "google" };
@@ -26,17 +27,18 @@ type DemoBoundary = LeafletPolygon & {
 };
 type DemoGeomanMap = LeafletMap & { pm: { enableDraw(shape: "Polygon", options?: Record<string, unknown>): void; disableDraw(): void } };
 type DemoMarkingType = "stall" | "ada" | "arrow" | "access_aisle" | "speed_bump" | "stop_bar";
-type DemoMarking = { id: string; type: DemoMarkingType; lat: number; lng: number };
+type DemoMarking = { id: string; type: DemoMarkingType; lat: number; lng: number; geometry: TakeoffGeometry; visibility: "visible" | "partially_supported" };
 type DemoCounts = { stalls: number; ada: number; arrows: number; accessAisles: number; speedBumps: number; stopBars: number };
 const EMPTY_DEMO_COUNTS: DemoCounts = { stalls: 0, ada: 0, arrows: 0, accessAisles: 0, speedBumps: 0, stopBars: 0 };
 type LotScanResult = DemoCounts & {
+  scanId: string;
   confidence: number;
   summary: string;
   warnings: string[];
   requiresManualConfirmation: boolean;
   boundaryIncomplete: boolean;
   occludedRows: Array<{ sectionId: string; rowId: string; reason: string; confidence: number }>;
-  detections: Array<{ type: DemoMarkingType; lat: number; lng: number; confidence: number; rowId: string }>;
+  detections: Array<{ type: DemoMarkingType; lat: number; lng: number; confidence: number; rowId: string; slotIndex: number; visibility: "visible" | "partially_supported"; evidence: string[]; geometry: TakeoffGeometry }>;
 };
 type PriceItem = {
   id: string;
@@ -117,7 +119,7 @@ function ProductDemo() {
   const demoTileLayerRef = useRef<TileLayer | null>(null);
   const demoImagerySignatureRef = useRef(`esri:${ESRI_IMAGERY_URL}:19`);
   const demoBoundaryRef = useRef<DemoBoundary | null>(null);
-  const demoMarkingLayersRef = useRef(new Map<string, LeafletMarker>());
+  const demoMarkingLayersRef = useRef(new Map<string, LeafletLayer>());
   const demoScanZoomRef = useRef(19);
   const [phase, setPhase] = useState<"typing" | "selecting" | "scanning" | "quote">("typing");
   const [address, setAddress] = useState("");
@@ -186,17 +188,28 @@ function ProductDemo() {
     demoMarkingLayersRef.current.clear();
     for (const marking of demoMarkings) {
       const label = marking.type === "ada" ? "ADA" : marking.type === "arrow" ? "↑" : marking.type === "access_aisle" ? "PATH" : marking.type === "speed_bump" ? "BUMP" : marking.type === "stop_bar" ? "STOP" : "S";
-      const marker = L.marker([marking.lat, marking.lng], {
-        bubblingMouseEvents: false,
-        icon: L.divIcon({ className: `demo-count-marker demo-count-${marking.type}`, html: label, iconSize: [30, 24], iconAnchor: [15, 12] }),
-      }).addTo(map);
-      marker.on("click", () => {
+      const layer = marking.geometry.type === "Polygon"
+        ? L.geoJSON({ type: "Feature", properties: {}, geometry: marking.geometry } as never, {
+          style: {
+            color: marking.type === "ada" ? "#2f8cff" : marking.type === "access_aisle" ? "#58a6ff" : "#ffb400",
+            fillColor: marking.type === "ada" ? "#2f8cff" : marking.type === "access_aisle" ? "#58a6ff" : "#ffb400",
+            weight: 2,
+            fillOpacity: .2,
+            dashArray: marking.visibility === "partially_supported" ? "5 4" : undefined,
+          },
+        }).addTo(map)
+        : L.marker([marking.lat, marking.lng], {
+          bubblingMouseEvents: false,
+          icon: L.divIcon({ className: `demo-count-marker demo-count-${marking.type}`, html: label, iconSize: [30, 24], iconAnchor: [15, 12] }),
+        }).addTo(map);
+      if (marking.geometry.type === "Polygon") layer.bindTooltip(label, { permanent: true, direction: "center", className: `demo-count-marker demo-count-${marking.type}` });
+      layer.on("click", () => {
         setDemoMarkings((current) => current.filter((item) => item.id !== marking.id));
         const key = marking.type === "stall" ? "stalls" : marking.type === "ada" ? "ada" : marking.type === "arrow" ? "arrows" : marking.type === "speed_bump" ? "speedBumps" : marking.type === "stop_bar" ? "stopBars" : "accessAisles";
         setDetectedCounts((current) => ({ ...current, [key]: Math.max(0, current[key] - 1) }));
       });
-      marker.bindTooltip(`Remove ${marking.type === "ada" ? "ADA stall" : marking.type === "access_aisle" ? "path / access aisle" : marking.type === "stop_bar" ? "solid stop line" : marking.type}`, { direction: "top" });
-      demoMarkingLayersRef.current.set(marking.id, marker);
+      if (marking.geometry.type !== "Polygon") layer.bindTooltip(`Remove ${marking.type === "ada" ? "ADA stall" : marking.type === "access_aisle" ? "path / access aisle" : marking.type === "stop_bar" ? "solid stop line" : marking.type}`, { direction: "top" });
+      demoMarkingLayersRef.current.set(marking.id, layer);
     }
   }, [demoMarkings]);
 
@@ -241,7 +254,7 @@ function ProductDemo() {
           ...result.warnings,
         ]);
         if (result.boundaryIncomplete) setScanError("The selected outline cuts off a visible parking row or drive aisle. Expand the flagged edge, then retry the scan.");
-        setDemoMarkings(result.detections.map((detection, index) => ({ id: `auto-${index}-${crypto.randomUUID()}`, type: detection.type, lat: detection.lat, lng: detection.lng })));
+        setDemoMarkings(result.detections.map((detection, index) => ({ id: `auto-${index}-${crypto.randomUUID()}`, type: detection.type, lat: detection.lat, lng: detection.lng, geometry: detection.geometry, visibility: detection.visibility })));
         setScanProgress(100);
         await new Promise((resolve) => window.setTimeout(resolve, 350));
       } catch (caught) {

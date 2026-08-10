@@ -49,8 +49,8 @@ describe("AI lot scan route", () => {
 
   it("runs focused sections concurrently, then reconciles them in a whole-lot verification pass", () => {
     expect(routeSource).toContain("mapWithConcurrency(sections, sections.length");
-    expect(routeSource).toContain("runVisionPass(apiKey, address, sections, verificationController.signal, firstPass)");
-    expect(routeSource).toContain("STALL ROW LEDGER");
+    expect(routeSource).toContain("runVisionPass(apiKey, address, sections, verificationController.signal, firstPass, correctionExamples)");
+    expect(routeSource).toContain("ORDERED SLOT LEDGER");
     expect(routeSource).toContain("ARROW SWEEP");
     expect(routeSource).toContain("PATH SWEEP");
     expect(routeSource).toContain("Do not echo first-pass duplicates");

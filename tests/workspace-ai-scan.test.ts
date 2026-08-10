@@ -11,7 +11,8 @@ describe("live workspace AI scan", () => {
   });
 
   it("creates localized model annotations from every detection", () => {
-    expect(workspaceSource).toContain("[detection.lng, detection.lat]");
+    expect(workspaceSource).toContain("geometry: detection.geometry");
+    expect(workspaceSource).toContain("detection.visibility");
     expect(workspaceSource).toContain('provenance: "model"');
     expect(workspaceSource).toContain('reviewStatus: "accepted"');
   });

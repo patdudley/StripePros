@@ -1,10 +1,24 @@
 import { json } from "@/lib/api";
 
 type DetectionType = "stall" | "ada" | "arrow" | "access_aisle" | "speed_bump" | "stop_bar";
+type Visibility = "visible" | "partially_supported" | "unknown";
+type NormalizedCorner = { x: number; y: number };
+type LocatedCorner = { lat: number; lng: number };
 type Viewport = { north: number; south: number; east: number; west: number };
 type ScanSection = { id: string; image: string; boundary: Array<{ x: number; y: number }>; viewport: Viewport };
-type ModelDetection = { sectionId: string; rowId: string; type: DetectionType; x: number; y: number; confidence: number };
-type LocatedDetection = ModelDetection & { lat: number; lng: number };
+type ModelDetection = {
+  sectionId: string;
+  rowId: string;
+  slotIndex: number;
+  type: DetectionType;
+  x: number;
+  y: number;
+  corners?: NormalizedCorner[];
+  visibility: Visibility;
+  evidence: string[];
+  confidence: number;
+};
+type LocatedDetection = ModelDetection & { lat: number; lng: number; geoCorners?: LocatedCorner[] };
 type OccludedRow = { sectionId: string; rowId: string; reason: string; confidence: number };
 type ScanPayload = {
   imageUsable?: unknown;
@@ -18,6 +32,15 @@ type ScanPayload = {
 
 const MAX_IMAGE_LENGTH = 12_000_000;
 const MAX_TOTAL_IMAGE_LENGTH = 60_000_000;
+
+async function loadCorrectionExamples() {
+  try {
+    const store = await import("@/lib/scan-corrections/store");
+    return await store.recentCorrectionExamples(6);
+  } catch {
+    return [];
+  }
+}
 
 function extractOutputText(payload: unknown) {
   if (!payload || typeof payload !== "object") return "";
@@ -70,9 +93,15 @@ function normalizeDetection(value: unknown, sectionIds: Set<string>): ModelDetec
   return {
     sectionId: String(detection.sectionId),
     rowId: typeof detection.rowId === "string" ? detection.rowId.slice(0, 80) : "unassigned-row",
+    slotIndex: Number.isInteger(Number(detection.slotIndex)) ? Math.max(0, Number(detection.slotIndex)) : 0,
     type: detection.type,
     x,
     y,
+    corners: Array.isArray(detection.corners)
+      ? detection.corners.map(normalizedPoint).filter((point): point is NormalizedCorner => Boolean(point)).slice(0, 4)
+      : undefined,
+    visibility: detection.visibility === "partially_supported" || detection.visibility === "unknown" ? detection.visibility : "visible",
+    evidence: Array.isArray(detection.evidence) ? detection.evidence.filter((item): item is string => typeof item === "string").map((item) => item.slice(0, 100)).slice(0, 5) : [],
     confidence: Math.max(0, Math.min(1, confidence)),
   };
 }
@@ -91,11 +120,73 @@ function normalizeOccludedRow(value: unknown, sectionIds: Set<string>): Occluded
 }
 
 function locateDetection(detection: ModelDetection, section: ScanSection): LocatedDetection {
+  const locate = (point: NormalizedCorner): LocatedCorner => ({
+    lat: section.viewport.north - point.y * (section.viewport.north - section.viewport.south),
+    lng: section.viewport.west + point.x * (section.viewport.east - section.viewport.west),
+  });
   return {
     ...detection,
     lat: section.viewport.north - detection.y * (section.viewport.north - section.viewport.south),
     lng: section.viewport.west + detection.x * (section.viewport.east - section.viewport.west),
+    geoCorners: detection.corners?.length === 4 ? detection.corners.map(locate) : undefined,
   };
+}
+
+type PlanePoint = { x: number; y: number };
+
+function polygonArea(points: PlanePoint[]) {
+  return Math.abs(points.reduce((sum, point, index) => {
+    const next = points[(index + 1) % points.length];
+    return sum + point.x * next.y - next.x * point.y;
+  }, 0) / 2);
+}
+
+function signedArea(points: PlanePoint[]) {
+  return points.reduce((sum, point, index) => {
+    const next = points[(index + 1) % points.length];
+    return sum + point.x * next.y - next.x * point.y;
+  }, 0) / 2;
+}
+
+function polygonOverlapRatio(a: LocatedDetection, b: LocatedDetection) {
+  if (a.geoCorners?.length !== 4 || b.geoCorners?.length !== 4) return 0;
+  const originLat = (a.lat + b.lat) / 2;
+  const originLng = (a.lng + b.lng) / 2;
+  const project = (point: LocatedCorner): PlanePoint => ({
+    x: (point.lng - originLng) * 364_000 * Math.cos(originLat * Math.PI / 180),
+    y: (point.lat - originLat) * 364_000,
+  });
+  const subject = a.geoCorners.map(project);
+  let clip = b.geoCorners.map(project);
+  if (signedArea(clip) < 0) clip = [...clip].reverse();
+  let output = signedArea(subject) < 0 ? [...subject].reverse() : subject;
+  const inside = (point: PlanePoint, edgeA: PlanePoint, edgeB: PlanePoint) => (edgeB.x - edgeA.x) * (point.y - edgeA.y) - (edgeB.y - edgeA.y) * (point.x - edgeA.x) >= -1e-6;
+  const intersection = (start: PlanePoint, end: PlanePoint, edgeA: PlanePoint, edgeB: PlanePoint): PlanePoint => {
+    const dc = { x: edgeA.x - edgeB.x, y: edgeA.y - edgeB.y };
+    const dp = { x: start.x - end.x, y: start.y - end.y };
+    const denominator = dc.x * dp.y - dc.y * dp.x;
+    if (Math.abs(denominator) < 1e-9) return end;
+    const n1 = edgeA.x * edgeB.y - edgeA.y * edgeB.x;
+    const n2 = start.x * end.y - start.y * end.x;
+    return { x: (n1 * dp.x - n2 * dc.x) / denominator, y: (n1 * dp.y - n2 * dc.y) / denominator };
+  };
+  for (let edgeIndex = 0; edgeIndex < clip.length; edgeIndex += 1) {
+    const input = output;
+    output = [];
+    if (!input.length) break;
+    const edgeA = clip[edgeIndex];
+    const edgeB = clip[(edgeIndex + 1) % clip.length];
+    let start = input[input.length - 1];
+    for (const end of input) {
+      if (inside(end, edgeA, edgeB)) {
+        if (!inside(start, edgeA, edgeB)) output.push(intersection(start, end, edgeA, edgeB));
+        output.push(end);
+      } else if (inside(start, edgeA, edgeB)) output.push(intersection(start, end, edgeA, edgeB));
+      start = end;
+    }
+  }
+  const smallerArea = Math.min(polygonArea(subject), polygonArea(clip));
+  return smallerArea > 0 ? polygonArea(output) / smallerArea : 0;
 }
 
 function distanceFeet(a: LocatedDetection, b: LocatedDetection) {
@@ -109,6 +200,7 @@ export function mergeOverlappingDetections(detections: LocatedDetection[]) {
   return [...rowCollapsed].sort((a, b) => b.confidence - a.confidence).reduce<LocatedDetection[]>((merged, candidate) => {
     const duplicate = merged.some((accepted) => {
       if (accepted.type !== candidate.type) return false;
+      if (polygonOverlapRatio(accepted, candidate) > .4) return true;
       const threshold = accepted.sectionId === candidate.sectionId ? 2.5 : candidate.type === "stall" ? 6 : 5;
       return distanceFeet(accepted, candidate) <= threshold;
     });
@@ -183,13 +275,30 @@ function scanSchema(sectionIds: string[]) {
         items: {
           type: "object",
           additionalProperties: false,
-          required: ["sectionId", "rowId", "type", "x", "y", "confidence"],
+          required: ["sectionId", "rowId", "slotIndex", "type", "x", "y", "corners", "visibility", "evidence", "confidence"],
           properties: {
             sectionId: { type: "string", enum: sectionIds },
             rowId: { type: "string" },
+            slotIndex: { type: "integer", minimum: 0 },
             type: { type: "string", enum: ["stall", "ada", "arrow", "access_aisle", "speed_bump", "stop_bar"] },
             x: { type: "number", minimum: 0, maximum: 1 },
             y: { type: "number", minimum: 0, maximum: 1 },
+            corners: {
+              type: "array",
+              minItems: 4,
+              maxItems: 4,
+              items: {
+                type: "object",
+                additionalProperties: false,
+                required: ["x", "y"],
+                properties: {
+                  x: { type: "number", minimum: 0, maximum: 1 },
+                  y: { type: "number", minimum: 0, maximum: 1 },
+                },
+              },
+            },
+            visibility: { type: "string", enum: ["visible", "partially_supported", "unknown"] },
+            evidence: { type: "array", minItems: 1, maxItems: 5, items: { type: "string" } },
             confidence: { type: "number", minimum: 0, maximum: 1 },
           },
         },
@@ -213,25 +322,34 @@ function scanSchema(sectionIds: string[]) {
   };
 }
 
-async function runVisionPass(apiKey: string, address: string, sections: ScanSection[], signal: AbortSignal, verificationSource?: ScanPayload) {
+async function runVisionPass(apiKey: string, address: string, sections: ScanSection[], signal: AbortSignal, verificationSource?: ScanPayload, correctionExamples: unknown[] = []) {
   const sectionGuide = sections.map((section) => ({ sectionId: section.id, boundary: section.boundary }));
   const prompt = verificationSource
-    ? `You are the final adjudicator for a parking-lot takeoff at ${address}. The section scans below are only fallible suggestions. Independently inspect every supplied image and return one corrected whole-lot result.
+    ? `You are the final row-and-slot adjudicator for a parking-lot takeoff at ${address}. The section scans below are fallible suggestions. Independently inspect every supplied image and return one corrected whole-lot result.
 
 Complete these sweeps in order before answering:
-1. STALL ROW LEDGER: enumerate each physical parking row once, follow it end-to-end, and place exactly one detection in the geometric center of each visible space. Never place one detection near the stall entrance and another near the parked vehicle or back line for the same physical stall. Reconcile overlapping crops: a physical marking visible in two sections must appear only once, assigned to the clearest section. Check the south/bottom and west/left boundary rows explicitly.
-2. ARROW SWEEP: traverse every drive aisle end-to-end in both directions and localize every distinct painted arrow. Do not stop after the stall count.
-3. PATH SWEEP: inspect both sides of every ADA cluster, curb ramp, and sidewalk connection for blue or white diagonal hatching and paths of travel. Count access_aisle independently; a path does not make an adjacent stall ADA.
-4. OTHER MARKINGS: verify blue ADA stalls, speed bumps, and solid transverse stop_bar markings separately.
+1. ROW RECONSTRUCTION: identify each physical parking row, its dominant axis, angle, approximate stall width/depth, and both endpoints before counting any space.
+2. ORDERED SLOT LEDGER: walk each row from one endpoint to the other. Assign stable slotIndex values and exactly one ledger entry per physical space. Classify it as stall, ada, partially_supported via visibility, or unknown. A partial slot needs at least two independent evidence signals in evidence (for example both separator continuations, one separator plus curb rhythm, or vehicle alignment plus a matching row interval). Confidence below 0.50 must be visibility unknown and must not be returned as a counted detection; flag its row instead.
+3. ORIENTED GEOMETRY: return four tight corners for every detection, aligned to the actual painted space or marking. Corners must describe the physical rectangle, never a generic horizontal label. Reconcile overlapping crops geometrically: if two proposed rectangles cover the same physical space, return only the clearest one even when section rowIds differ. Adjacent slots remain separate.
+4. SYMBOL SWEEPS — ARROW SWEEP and PATH SWEEP: traverse every drive aisle for arrows, then independently inspect ADA paint, access aisles/paths, speed bumps, and solid stop bars.
 
-Apply the strict ADA rule: classify a stall as ada only when blue paint belonging to that stall or a legible wheelchair symbol is visible. A nearby access aisle, path, curb ramp, or hatching never proves the adjacent stall is ADA. If a row is genuinely obscured, add one precise occludedRows entry instead of inventing or silently omitting spaces. Inspect immediately outside the polygon for truncated rows and use a boundary-edge- rowId when expansion is needed. Never estimate from lot area. Do not echo first-pass duplicates.
+Apply the strict ADA rule: classify a stall as ada only when visible blue paint belongs to that stall or a legible wheelchair symbol is visible. A path can exist without an ADA stall. Do not classify an ADA stall solely because an access aisle is nearby. Count access_aisle independently. Count stop_bar once for every clearly visible solid transverse painted stop line. Count speed bumps separately and do not confuse stop bars, crosswalks, shadows, or pavement seams with speed bumps. If a row is genuinely obscured, add one precise occludedRows entry instead of inventing or silently omitting spaces. Do not silently omit an uncertain or boundary-truncated row. Inspect immediately outside the polygon for truncated rows and use a boundary-edge- rowId when expansion is needed. Never estimate from lot area. Do not echo first-pass duplicates.
 
 FIRST PASS SUGGESTIONS:
 ${JSON.stringify(verificationSource).slice(0, 45_000)}
 SECTION BOUNDARIES:
 ${JSON.stringify(sectionGuide)}`
-    : `Review this single focused high-resolution aerial section for ${address}. Count only pixels inside its normalized polygon: ${JSON.stringify(sectionGuide)}. First enumerate every parking row and every drive aisle. Then inspect each row from one end to the other and assign a stable rowId such as north-01 or east-02. Return one localized detection centered in every visible marking. A stall is one non-ADA parking space bounded by visible separator lines or clearly visible separator endpoints; count it even when a parked vehicle or canopy hides the stall interior, provided both boundaries are visually supported. Never derive a row count from length or lot area. ADA CLASSIFICATION IS STRICT: classify a stall as ada only when visible blue paint belongs to that stall (blue field, blue border, or blue curb directly identifying it) or a legible wheelchair accessibility symbol is visible inside it. Do not classify an ADA stall solely because an access aisle, path of travel, curb ramp, or diagonal hatching is beside it. A path can exist without an ADA stall. Count that path independently as access_aisle, and count the adjacent space as a standard stall when its separator lines are visible but no blue or wheelchair evidence is visible. Never output both stall and ada for the same space. Traverse every drive aisle from end to end and count every painted directional arrow whose arrowhead and shaft are visually supported, including repeated arrows in sequence. Count access_aisle for each clearly visible striped access aisle or path of travel, independent of whether any adjacent stall qualifies as ADA. Count stop_bar once for every clearly visible solid transverse painted stop line at a stop sign, stop stencil, driveway exit, or controlled parking-lot intersection; do not count crosswalk bars, stall end lines, curbs, shadows, pavement seams, or lane dividers as stop_bar. Count speed_bump once for each clearly visible transverse raised speed bump or speed hump spanning a drive aisle; do not confuse stop bars, crosswalks, shadows, or pavement seams with speed bumps. If the boundaries needed to verify a stall or marking are hidden by trees, deep shadows, roofs, solar canopies, or image edges, do not invent it: put that specific row in occludedRows for manual confirmation. Inspect the visible context immediately outside the polygon too. If a polygon edge cuts through or excludes a continuous visible parking row or drive aisle, add an occludedRows entry whose rowId begins boundary-edge- and state which edge the user must expand. Do not silently omit an uncertain or boundary-truncated row. Ignore buildings, curbs, islands, ordinary lane lines, crosswalk bars, and UI. Overlap with neighboring sections is expected and will be merged geographically.`;
-  const content: Array<Record<string, unknown>> = [{ type: "input_text", text: prompt }];
+    : `Review this single focused high-resolution aerial section for ${address}. Count only pixels inside ${JSON.stringify(sectionGuide)}.
+
+Use a row-first procedure. Before outputting detections, reconstruct each parking row's dominant axis, angle, endpoints, and approximate stall width/depth. Then walk the row in order and build a slot ledger. Return exactly one detection per physical space, with a stable rowId and slotIndex. Never mark the entrance, vehicle center, and back line as separate stalls. For stall and ADA detections, corners must be the four oriented corners of the actual parking rectangle. For other markings, corners must tightly bound the painted marking. Do not return generic horizontal boxes.
+
+Visibility rules: visible means the physical slot is directly supported. partially_supported requires at least two independent evidence signals listed in evidence, such as both separator continuations, one separator plus curb rhythm, or vehicle alignment plus matching row intervals. Confidence below 0.50 is unknown: omit the detection and add its row to occludedRows. Never infer a count from lot length or area. Treat rowIds as local labels only; overlap with adjacent crops is expected and will be reconciled geometrically.
+
+ADA is strict: use ada only when blue paint belonging to that stall or a legible wheelchair symbol is visible. A path/access aisle never proves the adjacent stall is ADA. Count access_aisle independently. Traverse every drive aisle end-to-end for every painted arrow. Count solid transverse stop_bar markings and true speed bumps separately. If trees, shadows, roofs, canopies, UI, or image edges prevent two-signal support, flag the precise row for manual confirmation. Inspect immediately outside the polygon for truncated rows and use a boundary-edge- rowId when expansion is required.`;
+  const learnedContext = correctionExamples.length
+    ? `\n\nRECENT FOUNDER CORRECTIONS (use as behavioral examples, never as counts for this lot):\n${JSON.stringify(correctionExamples).slice(0, 12_000)}`
+    : "";
+  const content: Array<Record<string, unknown>> = [{ type: "input_text", text: `${prompt}${learnedContext}` }];
   for (const section of sections) {
     content.push({ type: "input_text", text: `Image ${section.id}. Its countable boundary is ${JSON.stringify(section.boundary)}.` });
     content.push({ type: "input_image", image_url: section.image, detail: "original" });
@@ -277,10 +395,11 @@ export async function POST(request: Request) {
   const timeout = setTimeout(() => controller.abort(), 75_000);
   try {
     const scanStartedAt = Date.now();
+    const correctionExamples = await loadCorrectionExamples();
     console.info("lot-scan:start", { sections: sections.length });
     const scannedSections = await mapWithConcurrency(sections, sections.length, async (section) => {
       const startedAt = Date.now();
-      const result = await runVisionPass(apiKey, address, [section], controller.signal);
+      const result = await runVisionPass(apiKey, address, [section], controller.signal, undefined, correctionExamples);
       console.info("lot-scan:section", { section: section.id, durationMs: Date.now() - startedAt, detections: Array.isArray(result.detections) ? result.detections.length : 0 });
       return result;
     });
@@ -300,7 +419,7 @@ export async function POST(request: Request) {
     let scanPasses = 1;
     try {
       const verificationStartedAt = Date.now();
-      verified = await runVisionPass(apiKey, address, sections, verificationController.signal, firstPass);
+      verified = await runVisionPass(apiKey, address, sections, verificationController.signal, firstPass, correctionExamples);
       scanPasses = 2;
       console.info("lot-scan:verification", { durationMs: Date.now() - verificationStartedAt, detections: Array.isArray(verified.detections) ? verified.detections.length : 0 });
     } catch (verificationError) {
@@ -311,7 +430,9 @@ export async function POST(request: Request) {
       clearTimeout(verificationTimeout);
     }
     const sectionIds = new Set(sections.map((section) => section.id));
-    const normalized = Array.isArray(verified.detections) ? verified.detections.map((item) => normalizeDetection(item, sectionIds)).filter((item): item is ModelDetection => Boolean(item)) : [];
+    const normalized = Array.isArray(verified.detections) ? verified.detections
+      .map((item) => normalizeDetection(item, sectionIds))
+      .filter((item): item is ModelDetection => Boolean(item) && item.visibility !== "unknown" && item.confidence >= .5) : [];
     const located = normalized.flatMap((detection) => {
       const section = sections.find((candidate) => candidate.id === detection.sectionId);
       return section ? [locateDetection(detection, section)] : [];
@@ -330,6 +451,7 @@ export async function POST(request: Request) {
     const accessAisles = detections.filter((item) => item.type === "access_aisle").length;
     const speedBumps = detections.filter((item) => item.type === "speed_bump").length;
     const stopBars = detections.filter((item) => item.type === "stop_bar").length;
+    const partiallySupported = detections.filter((item) => item.visibility === "partially_supported").length;
     const boundaryIncomplete = occludedRows.some((row) => row.rowId.startsWith("boundary-edge-") || /(?:boundary|polygon|outline).*(?:cuts|excludes|truncates|expand)/i.test(row.reason));
     console.info("lot-scan:complete", { durationMs: Date.now() - scanStartedAt, sections: sections.length, stalls, ada, arrows, accessAisles, speedBumps, stopBars, occludedRows: occludedRows.length });
     return json({
@@ -343,11 +465,24 @@ export async function POST(request: Request) {
       summary: typeof verified.summary === "string" ? verified.summary.slice(0, 300) : "Overlapping sections scanned and verified.",
       warnings,
       occludedRows,
-      requiresManualConfirmation: occludedRows.length > 0,
+      scanId: crypto.randomUUID(),
+      requiresManualConfirmation: occludedRows.length > 0 || partiallySupported > 0,
       boundaryIncomplete,
       scanPasses,
       sectionsScanned: sections.length,
-      detections: detections.map(({ type, confidence: detectionConfidence, lat, lng, rowId }) => ({ type, confidence: detectionConfidence, lat, lng, rowId })),
+      detections: detections.map(({ type, confidence: detectionConfidence, lat, lng, rowId, slotIndex, visibility, evidence, geoCorners }) => ({
+        type,
+        confidence: detectionConfidence,
+        lat,
+        lng,
+        rowId,
+        slotIndex,
+        visibility,
+        evidence,
+        geometry: geoCorners?.length === 4
+          ? { type: "Polygon", coordinates: [[...geoCorners.map((corner) => [corner.lng, corner.lat]), [geoCorners[0].lng, geoCorners[0].lat]]] }
+          : { type: "Point", coordinates: [lng, lat] },
+      })),
     });
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {

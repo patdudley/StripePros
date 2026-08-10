@@ -31,6 +31,10 @@ export type TakeoffAnnotation = {
   reviewStatus: AnnotationReviewStatus;
   service: StripingService;
   text?: string;
+  scanId?: string;
+  modelDetectionId?: string;
+  visibility?: "visible" | "partially_supported" | "unknown";
+  evidence?: string[];
 };
 
 export type LotExclusion = {

@@ -21,5 +21,9 @@ describe("live workspace AI scan", () => {
     expect(workspaceSource).not.toContain("STALL ROW ASSIST");
     expect(workspaceSource).not.toContain("AI SCAN READY");
     expect(workspaceSource).not.toContain("GENERATE THE QUOTE");
+    expect(workspaceSource).toContain("standardStallPrice");
+    expect(workspaceSource).toContain("adaStallPrice");
+    expect(workspaceSource).not.toContain("prices.standard_stall");
+    expect(workspaceSource).not.toContain("prices.ada_stall");
   });
 });

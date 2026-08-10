@@ -609,6 +609,8 @@ export function CredibleTakeoffWorkspace() {
   const calculation = useMemo(() => calculateQuote(quoteItems, materialMultiplier, 450), [quoteItems, materialMultiplier]);
   const acceptedAnnotations = annotations.filter((item) => item.reviewStatus === "accepted" || item.reviewStatus === "edited");
   const counters = useMemo(() => acceptedAnnotations.reduce<Record<string, number>>((result, item) => ({ ...result, [item.type]: (result[item.type] ?? 0) + 1 }), {}), [acceptedAnnotations]);
+  const standardStallPrice = prices[`standard_stall_${service}`] ?? DEFAULT_TAKEOFF_PRICES.standard_stall_restripe;
+  const adaStallPrice = prices[`ada_stall_${service}`] ?? DEFAULT_TAKEOFF_PRICES.ada_stall_restripe;
   const pavementArea = pavementAreaSqFt(boundary, exclusions);
   const canExport = Boolean(boundary && acceptedAnnotations.length && countsVerified);
 
@@ -715,8 +717,8 @@ export function CredibleTakeoffWorkspace() {
         <div className="quote-top"><span><BrandMark /> STRIPE PROS</span><b>EDITABLE DRAFT</b></div>
         <div className="quote-site"><small>PREPARED FOR</small><strong>{siteAddress || "Select a property"}</strong><span>{selectedSite?.label ?? ""}</span></div>
         <div className="quote-lines workspace-home-quote-lines">
-          <div><span>Standard stalls — restripe <small>{counters.standard_stall ?? 0} × {currency.format(prices.standard_stall)}</small></span><b>{currency.format((counters.standard_stall ?? 0) * prices.standard_stall)}</b></div>
-          <div><span>ADA stalls + symbols <small>{counters.ada_stall ?? 0} × {currency.format(prices.ada_stall)}</small></span><b>{currency.format((counters.ada_stall ?? 0) * prices.ada_stall)}</b></div>
+          <div><span>Standard stalls — {service === "restripe" ? "restripe" : "new layout"} <small>{counters.standard_stall ?? 0} × {currency.format(standardStallPrice)}</small></span><b>{currency.format((counters.standard_stall ?? 0) * standardStallPrice)}</b></div>
+          <div><span>ADA stalls + symbols <small>{counters.ada_stall ?? 0} × {currency.format(adaStallPrice)}</small></span><b>{currency.format((counters.ada_stall ?? 0) * adaStallPrice)}</b></div>
           <div><span>Paths of travel / access aisles <small>{counters.ada_access_aisle ?? 0} × {currency.format(prices.ada_access_aisle)}</small></span><b>{currency.format((counters.ada_access_aisle ?? 0) * prices.ada_access_aisle)}</b></div>
           <div><span>Directional arrows <small>{counters.directional_arrow ?? 0} × {currency.format(prices.directional_arrow)}</small></span><b>{currency.format((counters.directional_arrow ?? 0) * prices.directional_arrow)}</b></div>
           <div><span>Speed bumps <small>{counters.speed_bump ?? 0} × {currency.format(prices.speed_bump)}</small></span><b>{currency.format((counters.speed_bump ?? 0) * prices.speed_bump)}</b></div>

@@ -1,12 +1,14 @@
 import { json } from "@/lib/api";
 import { isAiScanningEnabled, SCANNING_SUSPENDED_MESSAGE } from "@/lib/ai-scanning";
+import { assertAutomatedAnalysisAllowed, getImageryProvider } from "@/lib/imagery/providers";
+import type { ImageryProvider } from "@/lib/imagery/types";
 
 type DetectionType = "stall" | "ada" | "arrow" | "access_aisle" | "speed_bump" | "stop_bar";
 type Visibility = "visible" | "partially_supported" | "unknown";
 type NormalizedCorner = { x: number; y: number };
 type LocatedCorner = { lat: number; lng: number };
 type Viewport = { north: number; south: number; east: number; west: number };
-type ScanSection = { id: string; image: string; boundary: Array<{ x: number; y: number }>; viewport: Viewport };
+export type ScanSection = { id: string; image: string; boundary: Array<{ x: number; y: number }>; viewport: Viewport };
 type ModelDetection = {
   sectionId: string;
   rowId: string;
@@ -376,19 +378,13 @@ ADA is strict: use ada only when blue paint belonging to that stall or a legible
   return JSON.parse(outputText) as ScanPayload;
 }
 
-export async function POST(request: Request) {
-  if (!isAiScanningEnabled()) return json({ code: "SCANNING_SUSPENDED", message: SCANNING_SUSPENDED_MESSAGE }, 503);
-  const apiKey = process.env.OPENAI_API_KEY?.trim();
-  if (!apiKey) return json({ error: "AI lot scanning is not configured yet." }, 503);
-
-  let body: { address?: unknown; sections?: unknown };
-  try {
-    body = await request.json() as { address?: unknown; sections?: unknown };
-  } catch {
-    return json({ error: "The lot scan request was not valid JSON." }, 400);
-  }
-  const address = typeof body.address === "string" ? body.address.trim().slice(0, 300) : "";
-  const sections = normalizeSections(body.sections);
+export async function runLicensedScanPipeline({ provider, apiKey, address, sections }: {
+  provider: ImageryProvider;
+  apiKey: string;
+  address: string;
+  sections: ScanSection[];
+}) {
+  assertAutomatedAnalysisAllowed(provider);
   if (!address) return json({ error: "A property address is required." }, 400);
   if (sections.length < 2) return json({ error: "At least two overlapping high-resolution lot sections are required." }, 400);
   if (sections.reduce((total, section) => total + section.image.length, 0) > MAX_TOTAL_IMAGE_LENGTH) return json({ error: "The aerial sections are too large to scan together." }, 413);
@@ -495,4 +491,30 @@ export async function POST(request: Request) {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+export async function POST(request: Request) {
+  if (!isAiScanningEnabled()) return json({ code: "SCANNING_SUSPENDED", message: SCANNING_SUSPENDED_MESSAGE }, 503);
+  let provider: ImageryProvider;
+  try {
+    provider = getImageryProvider();
+    assertAutomatedAnalysisAllowed(provider);
+  } catch (error) {
+    return json({ code: "IMAGERY_ANALYSIS_NOT_LICENSED", message: error instanceof Error ? error.message : "The configured imagery provider is not licensed for automated analysis." }, 403);
+  }
+  if (provider.id === "local-fixture") {
+    return json({ code: "LOCAL_FIXTURE_OFFLINE_ONLY", message: "Licensed fixtures can be scanned only by the offline fixture runner." }, 403);
+  }
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey) return json({ error: "AI lot scanning is not configured yet." }, 503);
+
+  let body: { address?: unknown; sections?: unknown };
+  try {
+    body = await request.json() as { address?: unknown; sections?: unknown };
+  } catch {
+    return json({ error: "The lot scan request was not valid JSON." }, 400);
+  }
+  const address = typeof body.address === "string" ? body.address.trim().slice(0, 300) : "";
+  const sections = normalizeSections(body.sections);
+  return runLicensedScanPipeline({ provider, apiKey, address, sections });
 }

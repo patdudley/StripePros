@@ -12,6 +12,7 @@
     "test": "vitest run --config vitest.config.ts",
     "test:ui": "vitest --config vitest.config.ts",
     "evaluate:lots": "node scripts/evaluate-lot-training.mjs",
+    "scan:fixture": "tsx scripts/run-fixture-scan.ts",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"
@@ -29,6 +30,7 @@
     "pdf-lib": "^1.17.1",
     "react": "19.2.6",
     "react-dom": "19.2.6",
+    "sharp": "^0.35.3",
     "stripe": "^22.4.0",
     "zod": "^4.4.3"
   },
@@ -53,6 +55,7 @@
     "tailwindcss": "4.2.1",
     "typescript": "5.9.3",
     "typescript-eslint": "8.59.3",
+    "tsx": "^4.20.6",
     "vinext": "1.0.0-beta.2",
     "vite": "8.0.13",
     "vitest": "^4.1.10",

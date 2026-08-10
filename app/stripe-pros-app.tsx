@@ -34,6 +34,7 @@ type LotScanResult = DemoCounts & {
   summary: string;
   warnings: string[];
   requiresManualConfirmation: boolean;
+  boundaryIncomplete: boolean;
   occludedRows: Array<{ sectionId: string; rowId: string; reason: string; confidence: number }>;
   detections: Array<{ type: DemoMarkingType; lat: number; lng: number; confidence: number; rowId: string }>;
 };
@@ -239,6 +240,7 @@ function ProductDemo() {
           ...result.occludedRows.map((row) => `${row.rowId}: ${row.reason}`),
           ...result.warnings,
         ]);
+        if (result.boundaryIncomplete) setScanError("The selected outline cuts off a visible parking row or drive aisle. Expand the flagged edge, then retry the scan.");
         setDemoMarkings(result.detections.map((detection, index) => ({ id: `auto-${index}-${crypto.randomUUID()}`, type: detection.type, lat: detection.lat, lng: detection.lng })));
         setScanProgress(100);
         await new Promise((resolve) => window.setTimeout(resolve, 350));

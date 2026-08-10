@@ -17,7 +17,9 @@ describe("AI lot scan route", () => {
 
   it("does not guess markings hidden by blocked zones", () => {
     expect(routeSource).toContain("occludedRows");
-    expect(routeSource).toContain("Do not silently omit an uncertain row");
+    expect(routeSource).toContain("Do not silently omit an uncertain or boundary-truncated row");
+    expect(routeSource).toContain("boundary-edge-");
+    expect(routeSource).toContain("boundaryIncomplete");
   });
 
   it("localizes visible ADA access aisles without inferring one from an ADA stall", () => {

@@ -38,6 +38,7 @@ type LotScanResult = {
   summary: string;
   warnings: string[];
   requiresManualConfirmation: boolean;
+  boundaryIncomplete: boolean;
   occludedRows: Array<{ sectionId: string; rowId: string; reason: string; confidence: number }>;
   detections: Array<{ type: "stall" | "ada" | "arrow" | "access_aisle" | "speed_bump"; lat: number; lng: number; confidence: number; rowId: string }>;
 };
@@ -555,6 +556,7 @@ export function CredibleTakeoffWorkspace() {
       replaceAnnotations([...manualAnnotations, ...modelAnnotations]);
       setScanConfidence(result.confidence);
       setScanWarnings([...result.occludedRows.map((row) => `${row.rowId}: ${row.reason}`), ...result.warnings]);
+      if (result.boundaryIncomplete) setScanError("The selected outline cuts off a visible parking row or drive aisle. Expand the flagged edge, then retry the scan.");
       setScanProgress(100);
       setMessage(result.requiresManualConfirmation
         ? `${modelAnnotations.length} visible markings counted. Manual confirmation required for ${result.occludedRows.length} occluded row${result.occludedRows.length === 1 ? "" : "s"}: ${result.occludedRows.map((row) => row.rowId).join(", ")}.`

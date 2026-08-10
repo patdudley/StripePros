@@ -49,15 +49,16 @@ describe("AI lot scan route", () => {
 
   it("runs focused sections concurrently, then reconciles them in a whole-lot verification pass", () => {
     expect(routeSource).toContain("mapWithConcurrency(sections, sections.length");
-    expect(routeSource).toContain("runVisionPass(apiKey, address, sections, controller.signal, firstPass)");
+    expect(routeSource).toContain("runVisionPass(apiKey, address, sections, verificationController.signal, firstPass)");
     expect(routeSource).toContain("STALL ROW LEDGER");
     expect(routeSource).toContain("ARROW SWEEP");
     expect(routeSource).toContain("PATH SWEEP");
     expect(routeSource).toContain("Do not echo first-pass duplicates");
-    expect(routeSource).toContain("105_000");
-    expect(routeSource).toContain('reasoning: { effort: verificationSource ? "medium" : "low" }');
-    expect(routeSource).toContain("verificationSource ? 7_000 : 5_000");
-    expect(routeSource).toContain("scanPasses: 2");
+    expect(routeSource).toContain("28_000");
+    expect(routeSource).toContain("lot-scan:verification-fallback");
+    expect(routeSource).toContain("section results were preserved for manual review");
+    expect(routeSource).toContain('reasoning: { effort: "low" }');
+    expect(routeSource).toContain("scanPasses");
   });
 
   it("does not turn a production timeout into a successful zero count", () => {

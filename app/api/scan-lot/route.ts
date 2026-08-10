@@ -105,7 +105,8 @@ function distanceFeet(a: LocatedDetection, b: LocatedDetection) {
 }
 
 export function mergeOverlappingDetections(detections: LocatedDetection[]) {
-  return [...detections].sort((a, b) => b.confidence - a.confidence).reduce<LocatedDetection[]>((merged, candidate) => {
+  const rowCollapsed = collapseSameRowDuplicates(detections);
+  return [...rowCollapsed].sort((a, b) => b.confidence - a.confidence).reduce<LocatedDetection[]>((merged, candidate) => {
     const duplicate = merged.some((accepted) => {
       if (accepted.type !== candidate.type) return false;
       const threshold = accepted.sectionId === candidate.sectionId ? 2.5 : candidate.type === "stall" ? 6 : 5;
@@ -114,6 +115,42 @@ export function mergeOverlappingDetections(detections: LocatedDetection[]) {
     if (!duplicate) merged.push(candidate);
     return merged;
   }, []);
+}
+
+export function collapseSameRowDuplicates(detections: LocatedDetection[]) {
+  const groups = new Map<string, LocatedDetection[]>();
+  for (const detection of detections) {
+    const key = `${detection.sectionId}:${detection.type}:${detection.rowId.toLowerCase().trim()}`;
+    groups.set(key, [...(groups.get(key) ?? []), detection]);
+  }
+  return [...groups.values()].flatMap((group) => {
+    if (group.length < 4 || (group[0].type !== "stall" && group[0].type !== "ada")) return group;
+    const latitude = group.reduce((sum, point) => sum + point.lat, 0) / group.length;
+    const origin = group[0];
+    const points = group.map((point) => ({
+      detection: point,
+      x: (point.lng - origin.lng) * 364_000 * Math.cos(latitude * Math.PI / 180),
+      y: (point.lat - origin.lat) * 364_000,
+    }));
+    const meanX = points.reduce((sum, point) => sum + point.x, 0) / points.length;
+    const meanY = points.reduce((sum, point) => sum + point.y, 0) / points.length;
+    const xx = points.reduce((sum, point) => sum + (point.x - meanX) ** 2, 0);
+    const xy = points.reduce((sum, point) => sum + (point.x - meanX) * (point.y - meanY), 0);
+    const yy = points.reduce((sum, point) => sum + (point.y - meanY) ** 2, 0);
+    const angle = .5 * Math.atan2(2 * xy, xx - yy);
+    const axis = { x: Math.cos(angle), y: Math.sin(angle) };
+    return [...points].sort((a, b) => b.detection.confidence - a.detection.confidence).reduce<typeof points>((accepted, candidate) => {
+      const duplicate = accepted.some((existing) => {
+        const dx = candidate.x - existing.x;
+        const dy = candidate.y - existing.y;
+        const alongRow = Math.abs(dx * axis.x + dy * axis.y);
+        const acrossRow = Math.abs(-dx * axis.y + dy * axis.x);
+        return alongRow <= 4.5 && acrossRow <= 22;
+      });
+      if (!duplicate) accepted.push(candidate);
+      return accepted;
+    }, []).map((point) => point.detection);
+  });
 }
 
 async function mapWithConcurrency<T, R>(items: T[], concurrency: number, worker: (item: T, index: number) => Promise<R>) {
@@ -205,8 +242,8 @@ ${JSON.stringify(sectionGuide)}`
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model: "gpt-5.6",
-      reasoning: { effort: verificationSource ? "medium" : "low" },
-      max_output_tokens: verificationSource ? 7_000 : 5_000,
+      reasoning: { effort: "low" },
+      max_output_tokens: 5_000,
       input: [{ role: "user", content }],
       text: { format: { type: "json_schema", name: verificationSource ? "parking_lot_verification" : "parking_lot_section_scan", strict: true, schema: scanSchema(sections.map((section) => section.id)) } },
     }),
@@ -237,7 +274,7 @@ export async function POST(request: Request) {
   if (sections.reduce((total, section) => total + section.image.length, 0) > MAX_TOTAL_IMAGE_LENGTH) return json({ error: "The aerial sections are too large to scan together." }, 413);
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 105_000);
+  const timeout = setTimeout(() => controller.abort(), 75_000);
   try {
     const scanStartedAt = Date.now();
     console.info("lot-scan:start", { sections: sections.length });
@@ -256,9 +293,23 @@ export async function POST(request: Request) {
       detections: scannedSections.flatMap((section) => Array.isArray(section.detections) ? section.detections : []),
       occludedRows: scannedSections.flatMap((section) => Array.isArray(section.occludedRows) ? section.occludedRows : []),
     };
-    const verificationStartedAt = Date.now();
-    const verified = await runVisionPass(apiKey, address, sections, controller.signal, firstPass);
-    console.info("lot-scan:verification", { durationMs: Date.now() - verificationStartedAt, detections: Array.isArray(verified.detections) ? verified.detections.length : 0 });
+    clearTimeout(timeout);
+    const verificationController = new AbortController();
+    const verificationTimeout = setTimeout(() => verificationController.abort(), 28_000);
+    let verified = firstPass;
+    let scanPasses = 1;
+    try {
+      const verificationStartedAt = Date.now();
+      verified = await runVisionPass(apiKey, address, sections, verificationController.signal, firstPass);
+      scanPasses = 2;
+      console.info("lot-scan:verification", { durationMs: Date.now() - verificationStartedAt, detections: Array.isArray(verified.detections) ? verified.detections.length : 0 });
+    } catch (verificationError) {
+      console.warn("lot-scan:verification-fallback", { reason: verificationError instanceof Error ? verificationError.name : "unknown" });
+      const firstWarnings = Array.isArray(firstPass.warnings) ? firstPass.warnings : [];
+      verified = { ...firstPass, warnings: [...firstWarnings, "The final reconciliation pass reached its time budget; section results were preserved for manual review."] };
+    } finally {
+      clearTimeout(verificationTimeout);
+    }
     const sectionIds = new Set(sections.map((section) => section.id));
     const normalized = Array.isArray(verified.detections) ? verified.detections.map((item) => normalizeDetection(item, sectionIds)).filter((item): item is ModelDetection => Boolean(item)) : [];
     const located = normalized.flatMap((detection) => {
@@ -294,7 +345,7 @@ export async function POST(request: Request) {
       occludedRows,
       requiresManualConfirmation: occludedRows.length > 0,
       boundaryIncomplete,
-      scanPasses: 2,
+      scanPasses,
       sectionsScanned: sections.length,
       detections: detections.map(({ type, confidence: detectionConfidence, lat, lng, rowId }) => ({ type, confidence: detectionConfidence, lat, lng, rowId })),
     });

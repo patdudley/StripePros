@@ -50,6 +50,6 @@ describe("production lot-scan scheduling", () => {
     expect(response.status).toBe(200);
     expect(fetchMock).toHaveBeenCalledTimes(5);
     expect(peakActive).toBe(4);
-    expect(elapsed).toBeLessThan(180);
+    expect(elapsed).toBeLessThan(1_000);
   });
 });

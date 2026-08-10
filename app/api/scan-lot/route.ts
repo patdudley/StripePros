@@ -192,8 +192,8 @@ async function runVisionPass(apiKey: string, address: string, sections: ScanSect
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model: "gpt-5.6",
-      reasoning: { effort: verificationSource ? "high" : "medium" },
-      max_output_tokens: 12_000,
+      reasoning: { effort: "medium" },
+      max_output_tokens: 8_000,
       input: [{ role: "user", content }],
       text: { format: { type: "json_schema", name: verificationSource ? "parking_lot_verification" : "parking_lot_section_scan", strict: true, schema: scanSchema(sections.map((section) => section.id)) } },
     }),
@@ -224,10 +224,22 @@ export async function POST(request: Request) {
   if (sections.reduce((total, section) => total + section.image.length, 0) > MAX_TOTAL_IMAGE_LENGTH) return json({ error: "The aerial sections are too large to scan together." }, 413);
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 240_000);
+  const timeout = setTimeout(() => controller.abort(), 210_000);
   try {
-    const scouts = await mapWithConcurrency(sections, 3, (section) => runVisionPass(apiKey, address, [section], controller.signal));
-    const verifiedSections = await mapWithConcurrency(sections, 3, (section, index) => runVisionPass(apiKey, address, [section], controller.signal, scouts[index]));
+    const scanStartedAt = Date.now();
+    console.info("lot-scan:start", { sections: sections.length });
+    const scouts = await mapWithConcurrency(sections, sections.length, async (section) => {
+      const startedAt = Date.now();
+      const result = await runVisionPass(apiKey, address, [section], controller.signal);
+      console.info("lot-scan:scout", { section: section.id, durationMs: Date.now() - startedAt, detections: Array.isArray(result.detections) ? result.detections.length : 0 });
+      return result;
+    });
+    const verifiedSections = await mapWithConcurrency(sections, sections.length, async (section, index) => {
+      const startedAt = Date.now();
+      const result = await runVisionPass(apiKey, address, [section], controller.signal, scouts[index]);
+      console.info("lot-scan:verify", { section: section.id, durationMs: Date.now() - startedAt, detections: Array.isArray(result.detections) ? result.detections.length : 0 });
+      return result;
+    });
     const verified: ScanPayload = {
       imageUsable: verifiedSections.some((section) => section.imageUsable === true),
       failureReason: verifiedSections.filter((section) => section.imageUsable !== true).map((section) => section.failureReason).filter((reason): reason is string => typeof reason === "string").join(" "),
@@ -257,6 +269,7 @@ export async function POST(request: Request) {
     const accessAisles = detections.filter((item) => item.type === "access_aisle").length;
     const speedBumps = detections.filter((item) => item.type === "speed_bump").length;
     const boundaryIncomplete = occludedRows.some((row) => row.rowId.startsWith("boundary-edge-") || /(?:boundary|polygon|outline).*(?:cuts|excludes|truncates|expand)/i.test(row.reason));
+    console.info("lot-scan:complete", { durationMs: Date.now() - scanStartedAt, sections: sections.length, stalls, ada, arrows, accessAisles, speedBumps, occludedRows: occludedRows.length });
     return json({
       stalls,
       ada,
@@ -274,7 +287,10 @@ export async function POST(request: Request) {
       detections: detections.map(({ type, confidence: detectionConfidence, lat, lng, rowId }) => ({ type, confidence: detectionConfidence, lat, lng, rowId })),
     });
   } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") return json({ error: "The multi-section AI scan exceeded four minutes. Retry once or confirm the flagged rows manually." }, 504);
+    if (error instanceof Error && error.name === "AbortError") {
+      console.error("lot-scan:timeout", { sections: sections.length, timeoutMs: 210_000 });
+      return json({ error: "The AI scan timed out before returning a count. No zero count was recorded—retry the scan." }, 504);
+    }
     return json({ error: error instanceof Error ? `AI lot scan failed: ${error.message}` : "The AI lot scan could not be completed." }, 502);
   } finally {
     clearTimeout(timeout);

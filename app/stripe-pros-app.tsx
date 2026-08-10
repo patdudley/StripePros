@@ -246,8 +246,6 @@ function ProductDemo() {
         await new Promise((resolve) => window.setTimeout(resolve, 350));
       } catch (caught) {
         if (controller.signal.aborted) return;
-        setDetectedCounts(EMPTY_DEMO_COUNTS);
-        setDemoMarkings([]);
         setScanError(caught instanceof Error ? caught.message : "The lot scan could not be completed.");
       } finally {
         if (!controller.signal.aborted) setPhase("quote");

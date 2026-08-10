@@ -4,8 +4,9 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { Layer as LeafletLayer, Map as LeafletMap, TileLayer } from "leaflet";
 import Link from "next/link";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import { toJpeg, toPng } from "html-to-image";
+import { toPng } from "html-to-image";
 import { activateTileLayer } from "@/lib/map-imagery";
+import { captureLotScanSections } from "@/lib/lot-scan-capture";
 import { calculateQuote } from "@/lib/quote-math";
 import { pavementAreaSqFt } from "@/lib/takeoff/geometry";
 import { aggregateAnnotationQuote, DEFAULT_TAKEOFF_PRICES } from "@/lib/takeoff/quote";
@@ -35,7 +36,9 @@ type LotScanResult = {
   confidence: number;
   summary: string;
   warnings: string[];
-  detections: Array<{ type: "stall" | "ada" | "arrow" | "access_aisle"; x: number; y: number; confidence: number }>;
+  requiresManualConfirmation: boolean;
+  occludedRows: Array<{ sectionId: string; rowId: string; reason: string; confidence: number }>;
+  detections: Array<{ type: "stall" | "ada" | "arrow" | "access_aisle"; lat: number; lng: number; confidence: number; rowId: string }>;
 };
 type DrawShape = "Polygon" | "Line" | "Marker";
 type DrawIntent = "boundary" | "exclusion" | "row" | AnnotationType | null;
@@ -519,36 +522,28 @@ export function CredibleTakeoffWorkspace() {
       map.invalidateSize(false);
       await new Promise((resolve) => window.setTimeout(resolve, 900));
 
-      const width = mapElement.clientWidth;
-      const height = mapElement.clientHeight;
-      const normalizedBoundary = selectedBoundary.coordinates[0].map(([lng, lat]) => {
-        const point = map.latLngToContainerPoint([lat, lng]);
-        return { x: Math.max(0, Math.min(1, point.x / width)), y: Math.max(0, Math.min(1, point.y / height)) };
+      const sections = await captureLotScanSections({
+        map,
+        mapElement,
+        boundary: selectedBoundary.coordinates[0].map(([lng, lat]) => map.wrapLatLng([lat, lng])),
+        maxZoom: Math.min(imageryInfo.maxZoom, LOT_REVIEW_ZOOM),
+        onProgress: (completed, total) => setScanProgress(Math.max(12, Math.round((completed / total) * 42))),
       });
-      mapElement.classList.add("clean-scan-capture");
-      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-      let image: string;
-      try {
-        image = await toJpeg(mapElement, { cacheBust: true, pixelRatio: 1.5, quality: .94, backgroundColor: "#11110f" });
-      } finally {
-        mapElement.classList.remove("clean-scan-capture");
-      }
       const response = await fetch("/api/scan-lot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ address: siteAddress, image, boundary: normalizedBoundary }),
+        body: JSON.stringify({ address: siteAddress, sections }),
       });
       const result = await response.json() as LotScanResult & { error?: string };
       if (!response.ok) throw new Error(result.error ?? "The AI scan could not be completed.");
 
       const modelAnnotations: TakeoffAnnotation[] = result.detections.map((detection, index) => {
-        const point = map.containerPointToLatLng([detection.x * width, detection.y * height]);
         const type: AnnotationType = detection.type === "stall" ? "standard_stall" : detection.type === "ada" ? "ada_stall" : detection.type === "access_aisle" ? "ada_access_aisle" : "directional_arrow";
         return {
           id: `model-${crypto.randomUUID()}-${index}`,
           type,
           label: `${TYPE_LABELS[type]} ${index + 1}`,
-          geometry: { type: "Point", coordinates: [point.lng, point.lat] },
+          geometry: { type: "Point", coordinates: [detection.lng, detection.lat] },
           provenance: "model",
           reviewStatus: "accepted",
           service,
@@ -557,9 +552,11 @@ export function CredibleTakeoffWorkspace() {
       const manualAnnotations = annotationsRef.current.filter((annotation) => annotation.provenance !== "model");
       replaceAnnotations([...manualAnnotations, ...modelAnnotations]);
       setScanConfidence(result.confidence);
-      setScanWarnings(result.warnings);
+      setScanWarnings([...result.occludedRows.map((row) => `${row.rowId}: ${row.reason}`), ...result.warnings]);
       setScanProgress(100);
-      setMessage(`${modelAnnotations.length} visible markings counted: ${result.stalls} standard stalls, ${result.ada} ADA, ${result.accessAisles} ADA paths / access aisles, ${result.arrows} arrows. Review every marker before verifying.`);
+      setMessage(result.requiresManualConfirmation
+        ? `${modelAnnotations.length} visible markings counted. Manual confirmation required for ${result.occludedRows.length} occluded row${result.occludedRows.length === 1 ? "" : "s"}: ${result.occludedRows.map((row) => row.rowId).join(", ")}.`
+        : `${modelAnnotations.length} visible markings counted: ${result.stalls} standard stalls, ${result.ada} ADA, ${result.accessAisles} ADA paths / access aisles, ${result.arrows} arrows. Review every marker before verifying.`);
       await new Promise((resolve) => window.setTimeout(resolve, 350));
     } catch (error) {
       const detail = error instanceof Error ? error.message : "The AI scan could not be completed.";
@@ -674,7 +671,6 @@ export function CredibleTakeoffWorkspace() {
             {suggesting && !suggestions.length ? <span>SEARCHING ADDRESSES…</span> : suggestions.map((suggestion, index) => <button id={`workspace-suggestion-${index}`} role="option" aria-selected={index === activeSuggestion} className={index === activeSuggestion ? "active" : ""} type="button" key={`${suggestion.lat}-${suggestion.lng}-${index}`} onMouseDown={(event) => event.preventDefault()} onClick={() => selectAddress(suggestion)}><i>⌖</i><span><strong>{suggestion.primary}</strong><small>{suggestion.secondary}</small></span></button>)}
           </div>}
         </form>
-        <div className={`imagery-chip ${imageryInfo.provider !== "esri" ? "hd" : ""}`}><i /> {imageryInfo.provider.toUpperCase()} IMAGERY <span>{imageryInfo.detail}</span></div>
         {results.length > 1 && <div className="address-results">{results.map((result) => <button key={`${result.lat}-${result.lng}`} onClick={() => selectAddress(result)}>{result.label}</button>)}</div>}
         {searchError && <p className="workspace-error">{searchError}</p>}
         {selectedSite && <div className="workspace-resolved-address"><b>✓ GOOGLE ADDRESS CONFIRMED</b><span>{selectedSite.label}</span></div>}
@@ -688,16 +684,18 @@ export function CredibleTakeoffWorkspace() {
         {scanning && <div className="workspace-scan-line"><span>AI SCANNING SELECTED LOT · {scanProgress}%</span><div><b style={{ width: `${scanProgress}%` }} /></div></div>}
         <div className="takeoff-message"><strong>{message}</strong></div>
       </div>
-      <aside className="estimate-panel annotation-panel">
-        <div className="estimate-panel-head"><div><p>ANNOTATION-DRIVEN QUOTE</p><h1>{currency.format(calculation.total)}</h1></div><span>{countsVerified ? "VERIFIED" : "REVIEW"}</span></div>
-        <div className={`detection-status ${scanError ? "error" : scanning ? "running" : scanConfidence !== null ? "ready" : ""}`}><i>{scanError ? "!" : scanning ? `${scanProgress}%` : scanConfidence !== null ? "✓" : "AI"}</i><span><strong>{scanError ? "AI SCAN NEEDS ATTENTION" : scanning ? `COUNTING VISIBLE MARKINGS · ${scanProgress}%` : scanConfidence !== null ? `AI SCAN COMPLETE · ${Math.round(scanConfidence * 100)}% CONFIDENCE` : "AI SCAN READY"}</strong><small>{scanError || scanWarnings[0] || (boundary ? "Review the localized markers, then verify the counts." : "Draw the lot boundary to count visible markings.")}</small>{scanning && <em className="workspace-progress-track"><b style={{ width: `${scanProgress}%` }} /></em>}</span>{boundary && !scanning && <button onClick={() => void runAiScan()}>SCAN AGAIN</button>}</div>
-        <section className="row-assist-panel">
-          <div className="panel-section-title"><span>STALL ROW ASSIST</span><small>MOST ACCURATE MANUAL TOOL</small></div>
-          <button className="row-baseline-button" disabled={!boundary} onClick={() => startDraw("row")}>{rowBaseline ? "REDRAW ROW BASELINE" : "CLICK ROW START + END"}</button>
-          <div className="row-fields"><label>ANGLE<select value={[90, 60, 45].includes(rowAngle) ? String(rowAngle) : "custom"} onChange={(event) => event.target.value !== "custom" && setRowAngle(Number(event.target.value))}><option value="90">90°</option><option value="60">60°</option><option value="45">45°</option><option value="custom">Custom</option></select></label><label>CUSTOM °<input aria-label="Custom stall angle in degrees" type="number" min="1" max="179" value={rowAngle} onChange={(event) => setRowAngle(Math.max(1, Math.min(179, Number(event.target.value))))} /></label><label>MODE<select value={rowMode} onChange={(event) => setRowMode(event.target.value as "count" | "spacing")}><option value="count">Total count</option><option value="spacing">Spacing</option></select></label><label>COUNT<input type="number" min="1" max="200" value={rowCount} disabled={rowMode !== "count"} onChange={(event) => setRowCount(Math.max(1, Number(event.target.value)))} /></label><label>SPACING FT<input type="number" min="5" max="20" step=".5" value={rowSpacing} onChange={(event) => setRowSpacing(Math.max(5, Number(event.target.value)))} /></label></div>
-          <div className="service-switch"><span>SERVICE</span><button className={service === "restripe" ? "selected" : ""} onClick={() => setService("restripe")}>RESTRIPE</button><button className={service === "new_layout" ? "selected" : ""} onClick={() => setService("new_layout")}>NEW LAYOUT</button></div>
-          {rowBaseline && <div className="row-preview-actions"><span><b>{rowPreview.length}</b> STALL PREVIEW</span><button onClick={commitRow}>COMMIT INDIVIDUAL STALLS →</button></div>}
-        </section>
+      <aside className="estimate-panel annotation-panel workspace-quote-panel">
+        <div className="workspace-quote-step"><b>03</b><span>GENERATE THE QUOTE</span></div>
+        <div className="quote-top"><span><BrandMark /> STRIPE PROS</span><b>EDITABLE DRAFT</b></div>
+        <div className="quote-site"><small>PREPARED FOR</small><strong>{siteAddress || "Select a property"}</strong><span>{selectedSite?.label ?? ""}</span></div>
+        <div className="quote-lines workspace-home-quote-lines">
+          <div><span>Standard stalls — restripe <small>{counters.standard_stall ?? 0} × {currency.format(prices.standard_stall)}</small></span><b>{currency.format((counters.standard_stall ?? 0) * prices.standard_stall)}</b></div>
+          <div><span>ADA stalls + symbols <small>{counters.ada_stall ?? 0} × {currency.format(prices.ada_stall)}</small></span><b>{currency.format((counters.ada_stall ?? 0) * prices.ada_stall)}</b></div>
+          <div><span>ADA paths / access aisles <small>{counters.ada_access_aisle ?? 0} × {currency.format(prices.ada_access_aisle)}</small></span><b>{currency.format((counters.ada_access_aisle ?? 0) * prices.ada_access_aisle)}</b></div>
+          <div><span>Directional arrows <small>{counters.directional_arrow ?? 0} × {currency.format(prices.directional_arrow)}</small></span><b>{currency.format((counters.directional_arrow ?? 0) * prices.directional_arrow)}</b></div>
+        </div>
+        <div className="quote-total workspace-home-quote-total"><span>DRAFT TOTAL</span><strong>{currency.format(calculation.total)}</strong></div>
+        <div className="quote-ready workspace-home-quote-ready"><span>{scanError || scanWarnings.length ? "!" : "✓"}</span><div><b>{scanError ? "MANUAL COUNT REQUIRED" : scanWarnings.length ? "OCCLUDED ROWS NEED CONFIRMATION" : "AI SCAN COMPLETE — VERIFY BEFORE SENDING"}</b><small>{scanError || scanWarnings[0] || "Automatic counts can be corrected for trees, shadows, or faded markings"}</small></div></div>
         <section className="typed-tools">
           <div className="panel-section-title"><span>TYPED ANNOTATIONS</span><small>CLICK TYPE, THEN MAP</small></div>
           <div>{(Object.keys(TYPE_LABELS) as AnnotationType[]).map((type) => <button key={type} className={`type-tool type-${type}`} disabled={!boundary} onClick={() => startDraw(type)}><i style={{ background: ANNOTATION_COLORS[type] }} />{TYPE_LABELS[type]}</button>)}</div>

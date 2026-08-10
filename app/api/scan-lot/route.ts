@@ -1,7 +1,11 @@
 import { json } from "@/lib/api";
 
 type DetectionType = "stall" | "ada" | "arrow" | "access_aisle";
-type ScanDetection = { type: DetectionType; x: number; y: number; confidence: number };
+type Viewport = { north: number; south: number; east: number; west: number };
+type ScanSection = { id: string; image: string; boundary: Array<{ x: number; y: number }>; viewport: Viewport };
+type ModelDetection = { sectionId: string; rowId: string; type: DetectionType; x: number; y: number; confidence: number };
+type LocatedDetection = ModelDetection & { lat: number; lng: number };
+type OccludedRow = { sectionId: string; rowId: string; reason: string; confidence: number };
 type ScanPayload = {
   imageUsable?: unknown;
   failureReason?: unknown;
@@ -9,9 +13,11 @@ type ScanPayload = {
   summary?: unknown;
   warnings?: unknown;
   detections?: unknown;
+  occludedRows?: unknown;
 };
 
 const MAX_IMAGE_LENGTH = 12_000_000;
+const MAX_TOTAL_IMAGE_LENGTH = 36_000_000;
 
 function extractOutputText(payload: unknown) {
   if (!payload || typeof payload !== "object") return "";
@@ -29,62 +35,104 @@ function extractOutputText(payload: unknown) {
   return "";
 }
 
-function normalizeDetection(value: unknown): ScanDetection | null {
+function normalizedPoint(value: unknown) {
+  if (!value || typeof value !== "object") return null;
+  const point = value as { x?: unknown; y?: unknown };
+  const x = Number(point.x);
+  const y = Number(point.y);
+  return Number.isFinite(x) && Number.isFinite(y) && x >= 0 && x <= 1 && y >= 0 && y <= 1 ? { x, y } : null;
+}
+
+function normalizeSections(value: unknown): ScanSection[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((raw, index) => {
+    if (!raw || typeof raw !== "object") return [];
+    const section = raw as Record<string, unknown>;
+    const image = typeof section.image === "string" ? section.image : "";
+    const boundary = Array.isArray(section.boundary) ? section.boundary.map(normalizedPoint).filter((point): point is { x: number; y: number } => Boolean(point)).slice(0, 100) : [];
+    const rawViewport = section.viewport && typeof section.viewport === "object" ? section.viewport as Record<string, unknown> : {};
+    const viewport = { north: Number(rawViewport.north), south: Number(rawViewport.south), east: Number(rawViewport.east), west: Number(rawViewport.west) };
+    if ((!image.startsWith("data:image/jpeg;base64,") && !image.startsWith("data:image/png;base64,")) || image.length > MAX_IMAGE_LENGTH || boundary.length < 3) return [];
+    if (!Object.values(viewport).every(Number.isFinite) || viewport.north <= viewport.south || viewport.east <= viewport.west) return [];
+    return [{ id: `section-${index + 1}`, image, boundary, viewport }];
+  }).slice(0, 4);
+}
+
+function normalizeDetection(value: unknown, sectionIds: Set<string>): ModelDetection | null {
   if (!value || typeof value !== "object") return null;
   const detection = value as Record<string, unknown>;
+  if (!sectionIds.has(String(detection.sectionId))) return null;
   if (detection.type !== "stall" && detection.type !== "ada" && detection.type !== "arrow" && detection.type !== "access_aisle") return null;
   const x = Number(detection.x);
   const y = Number(detection.y);
   const confidence = Number(detection.confidence);
   if (![x, y, confidence].every(Number.isFinite) || x < 0 || x > 1 || y < 0 || y > 1) return null;
-  return { type: detection.type, x, y, confidence: Math.max(0, Math.min(1, confidence)) };
+  return {
+    sectionId: String(detection.sectionId),
+    rowId: typeof detection.rowId === "string" ? detection.rowId.slice(0, 80) : "unassigned-row",
+    type: detection.type,
+    x,
+    y,
+    confidence: Math.max(0, Math.min(1, confidence)),
+  };
 }
 
-export async function POST(request: Request) {
-  const apiKey = process.env.OPENAI_API_KEY?.trim();
-  if (!apiKey) return json({ error: "AI lot scanning is not configured yet." }, 503);
+function normalizeOccludedRow(value: unknown, sectionIds: Set<string>): OccludedRow | null {
+  if (!value || typeof value !== "object") return null;
+  const row = value as Record<string, unknown>;
+  if (!sectionIds.has(String(row.sectionId))) return null;
+  const confidence = Number(row.confidence);
+  return {
+    sectionId: String(row.sectionId),
+    rowId: typeof row.rowId === "string" ? row.rowId.slice(0, 80) : "unassigned-row",
+    reason: typeof row.reason === "string" ? row.reason.slice(0, 220) : "Part of this row is not visible.",
+    confidence: Number.isFinite(confidence) ? Math.max(0, Math.min(1, confidence)) : 0,
+  };
+}
 
-  let body: { address?: unknown; image?: unknown; boundary?: unknown };
-  try {
-    body = await request.json() as { address?: unknown; image?: unknown; boundary?: unknown };
-  } catch {
-    return json({ error: "The lot scan request was not valid JSON." }, 400);
-  }
+function locateDetection(detection: ModelDetection, section: ScanSection): LocatedDetection {
+  return {
+    ...detection,
+    lat: section.viewport.north - detection.y * (section.viewport.north - section.viewport.south),
+    lng: section.viewport.west + detection.x * (section.viewport.east - section.viewport.west),
+  };
+}
 
-  const address = typeof body.address === "string" ? body.address.trim().slice(0, 300) : "";
-  const image = typeof body.image === "string" ? body.image : "";
-  const boundary = Array.isArray(body.boundary) ? body.boundary.flatMap((value) => {
-    if (!value || typeof value !== "object") return [];
-    const point = value as { x?: unknown; y?: unknown };
-    const x = Number(point.x);
-    const y = Number(point.y);
-    return Number.isFinite(x) && Number.isFinite(y) && x >= 0 && x <= 1 && y >= 0 && y <= 1 ? [{ x, y }] : [];
-  }).slice(0, 100) : [];
-  if (!address) return json({ error: "A property address is required." }, 400);
-  if (!image.startsWith("data:image/jpeg;base64,") && !image.startsWith("data:image/png;base64,")) {
-    return json({ error: "A captured aerial image is required." }, 400);
-  }
-  if (image.length > MAX_IMAGE_LENGTH) return json({ error: "The aerial capture is too large to scan." }, 413);
-  if (boundary.length < 3) return json({ error: "A valid lot boundary is required for the clean scan." }, 400);
+function distanceFeet(a: LocatedDetection, b: LocatedDetection) {
+  const latitudeFeet = (a.lat - b.lat) * 364_000;
+  const longitudeFeet = (a.lng - b.lng) * 364_000 * Math.cos(((a.lat + b.lat) / 2) * Math.PI / 180);
+  return Math.hypot(latitudeFeet, longitudeFeet);
+}
 
-  const schema = {
+export function mergeOverlappingDetections(detections: LocatedDetection[]) {
+  return [...detections].sort((a, b) => b.confidence - a.confidence).reduce<LocatedDetection[]>((merged, candidate) => {
+    const duplicate = merged.some((accepted) => accepted.type === candidate.type && accepted.sectionId !== candidate.sectionId && distanceFeet(accepted, candidate) <= (candidate.type === "stall" ? 6 : 5));
+    if (!duplicate) merged.push(candidate);
+    return merged;
+  }, []);
+}
+
+function scanSchema(sectionIds: string[]) {
+  return {
     type: "object",
     additionalProperties: false,
-    required: ["imageUsable", "failureReason", "confidence", "summary", "warnings", "detections"],
+    required: ["imageUsable", "failureReason", "confidence", "summary", "warnings", "detections", "occludedRows"],
     properties: {
       imageUsable: { type: "boolean" },
       failureReason: { type: "string" },
       confidence: { type: "number", minimum: 0, maximum: 1 },
       summary: { type: "string" },
-      warnings: { type: "array", items: { type: "string" }, maxItems: 8 },
+      warnings: { type: "array", items: { type: "string" }, maxItems: 12 },
       detections: {
         type: "array",
-        maxItems: 250,
+        maxItems: 400,
         items: {
           type: "object",
           additionalProperties: false,
-          required: ["type", "x", "y", "confidence"],
+          required: ["sectionId", "rowId", "type", "x", "y", "confidence"],
           properties: {
+            sectionId: { type: "string", enum: sectionIds },
+            rowId: { type: "string" },
             type: { type: "string", enum: ["stall", "ada", "arrow", "access_aisle"] },
             x: { type: "number", minimum: 0, maximum: 1 },
             y: { type: "number", minimum: 0, maximum: 1 },
@@ -92,77 +140,112 @@ export async function POST(request: Request) {
           },
         },
       },
+      occludedRows: {
+        type: "array",
+        maxItems: 40,
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["sectionId", "rowId", "reason", "confidence"],
+          properties: {
+            sectionId: { type: "string", enum: sectionIds },
+            rowId: { type: "string" },
+            reason: { type: "string" },
+            confidence: { type: "number", minimum: 0, maximum: 1 },
+          },
+        },
+      },
     },
   };
+}
+
+async function runVisionPass(apiKey: string, address: string, sections: ScanSection[], signal: AbortSignal, verificationSource?: ScanPayload) {
+  const sectionGuide = sections.map((section) => ({ sectionId: section.id, boundary: section.boundary }));
+  const prompt = verificationSource
+    ? `Perform a second, independent verification of a parking-lot takeoff for ${address}. The first pass JSON is below. Recount every section row-by-row from the images; correct missed or false detections rather than merely agreeing with it. Overlapping images may contain the same marking, but still localize it in the clearest section. Keep every genuinely occluded or cut-off row in occludedRows for manual confirmation. Never estimate from lot area.\nFIRST PASS:\n${JSON.stringify(verificationSource).slice(0, 45_000)}\nSECTION BOUNDARIES:\n${JSON.stringify(sectionGuide)}`
+    : `Review the overlapping high-resolution aerial sections for ${address}. Analyze only pixels inside each section's normalized polygon: ${JSON.stringify(sectionGuide)}. Work row-by-row in every section and assign a stable rowId such as north-01 or east-02. Return one localized detection at the center of every visible marking. A stall is one visible non-ADA parking space; an ADA stall is separate and must not also be a standard stall. Count a directional arrow only when its painted arrow shape is visible. Count access_aisle only for clearly visible ADA hatching or a striped accessible path. Do not infer markings hidden by trees, shadows, roofs, solar canopies, vehicles, or image edges. Put every partly or fully occluded row in occludedRows with a precise reason; do not silently omit it and do not estimate from lot size. Ignore buildings, curbs, islands, lane lines, crosswalk bars, and UI. Duplicates from overlapping sections are expected and will be merged geographically.`;
+  const content: Array<Record<string, unknown>> = [{ type: "input_text", text: prompt }];
+  for (const section of sections) {
+    content.push({ type: "input_text", text: `Image ${section.id}. Its countable boundary is ${JSON.stringify(section.boundary)}.` });
+    content.push({ type: "input_image", image_url: section.image, detail: "original" });
+  }
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    signal,
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "gpt-5.6",
+      reasoning: { effort: verificationSource ? "high" : "medium" },
+      max_output_tokens: 12_000,
+      input: [{ role: "user", content }],
+      text: { format: { type: "json_schema", name: verificationSource ? "parking_lot_verification" : "parking_lot_section_scan", strict: true, schema: scanSchema(sections.map((section) => section.id)) } },
+    }),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => null) as { error?: { message?: string } } | null;
+    throw new Error(error?.error?.message?.slice(0, 180) || "AI lot scanning is temporarily unavailable.");
+  }
+  const outputText = extractOutputText(await response.json() as unknown);
+  if (!outputText) throw new Error("The AI scan returned no usable result.");
+  return JSON.parse(outputText) as ScanPayload;
+}
+
+export async function POST(request: Request) {
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey) return json({ error: "AI lot scanning is not configured yet." }, 503);
+
+  let body: { address?: unknown; sections?: unknown };
+  try {
+    body = await request.json() as { address?: unknown; sections?: unknown };
+  } catch {
+    return json({ error: "The lot scan request was not valid JSON." }, 400);
+  }
+  const address = typeof body.address === "string" ? body.address.trim().slice(0, 300) : "";
+  const sections = normalizeSections(body.sections);
+  if (!address) return json({ error: "A property address is required." }, 400);
+  if (sections.length < 2) return json({ error: "At least two overlapping high-resolution lot sections are required." }, 400);
+  if (sections.reduce((total, section) => total + section.image.length, 0) > MAX_TOTAL_IMAGE_LENGTH) return json({ error: "The aerial sections are too large to scan together." }, 413);
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 105_000);
+  const timeout = setTimeout(() => controller.abort(), 175_000);
   try {
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      signal: controller.signal,
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-5.6",
-        reasoning: { effort: "medium" },
-        max_output_tokens: 8_000,
-        input: [{
-          role: "user",
-          content: [
-            {
-              type: "input_text",
-              text: `Act as a conservative parking-lot striping takeoff reviewer. The property is ${address}. This is a clean aerial capture with no selection overlay. Analyze only pixels inside this normalized image-coordinate polygon: ${JSON.stringify(boundary)}.
-
-Work row by row, clockwise from the top-left of the selected pavement. Return one detection for every visible painted marking and put its center at normalized image coordinates x/y from 0 to 1. A standard stall is one non-ADA parking space defined by its visible separator/end lines, whether occupied or empty. An ADA stall is counted separately and must not also be counted as a standard stall. Count painted directional traffic arrows only when the arrow shape is visible. Return access_aisle for each clearly visible ADA access aisle or striped accessible path beside an ADA stall, placing the marker in the center of its diagonal hatching. Do not assume an access aisle merely because an ADA stall exists. Do not count vehicles, curbs, ordinary crosswalk bars, parking-lot islands, lane lines, the yellow selection outline, buildings, UI controls, or inferred spaces hidden by trees/shadows/roofs.
-
-Every count shown to the user will be derived from your detection list, so include exactly one localized detection per marking. Set imageUsable false when imagery or an obstruction prevents a reliable review and explain why in failureReason. If an individual marking is blocked or ambiguous, omit it and describe the blocked zone in warnings instead of guessing. Keep the summary short and state what was visibly counted.`,
-            },
-            { type: "input_image", image_url: image, detail: "original" },
-          ],
-        }],
-        text: { format: { type: "json_schema", name: "parking_lot_scan", strict: true, schema } },
-      }),
+    const scout = await runVisionPass(apiKey, address, sections, controller.signal);
+    const verified = await runVisionPass(apiKey, address, sections, controller.signal, scout);
+    const sectionIds = new Set(sections.map((section) => section.id));
+    const normalized = Array.isArray(verified.detections) ? verified.detections.map((item) => normalizeDetection(item, sectionIds)).filter((item): item is ModelDetection => Boolean(item)) : [];
+    const located = normalized.flatMap((detection) => {
+      const section = sections.find((candidate) => candidate.id === detection.sectionId);
+      return section ? [locateDetection(detection, section)] : [];
     });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => null) as { error?: { message?: string } } | null;
-      const detail = error?.error?.message?.slice(0, 180);
-      return json({ error: detail ? `AI lot scan failed: ${detail}` : "AI lot scanning is temporarily unavailable." }, 502);
+    const detections = mergeOverlappingDetections(located);
+    const occludedRows = Array.isArray(verified.occludedRows) ? verified.occludedRows.map((item) => normalizeOccludedRow(item, sectionIds)).filter((item): item is OccludedRow => Boolean(item)) : [];
+    const warnings = Array.isArray(verified.warnings) ? verified.warnings.filter((item): item is string => typeof item === "string").map((item) => item.slice(0, 220)).slice(0, 12) : [];
+    const confidence = Number(verified.confidence);
+    if (verified.imageUsable !== true || (detections.length === 0 && occludedRows.length > 0)) {
+      const reason = typeof verified.failureReason === "string" && verified.failureReason.trim() ? verified.failureReason.trim().slice(0, 220) : occludedRows[0]?.reason || "The aerial sections could not be reviewed reliably.";
+      return json({ error: `${reason} Manual row confirmation is required.` }, 422);
     }
-
-    const raw = await response.json() as unknown;
-    const outputText = extractOutputText(raw);
-    if (!outputText) return json({ error: "The AI scan returned no usable result." }, 502);
-    const parsed = JSON.parse(outputText) as ScanPayload;
-    const detections = Array.isArray(parsed.detections) ? parsed.detections.map(normalizeDetection).filter((item): item is ScanDetection => Boolean(item)) : [];
     const stalls = detections.filter((item) => item.type === "stall").length;
     const ada = detections.filter((item) => item.type === "ada").length;
     const arrows = detections.filter((item) => item.type === "arrow").length;
     const accessAisles = detections.filter((item) => item.type === "access_aisle").length;
-    const confidence = Number(parsed.confidence);
-    const warnings = Array.isArray(parsed.warnings) ? parsed.warnings.filter((item): item is string => typeof item === "string").map((item) => item.slice(0, 220)).slice(0, 8) : [];
-    const obstructionWarning = warnings.some((warning) => /obscur|overlay|blocked|unusable|hidden|label|cannot verify/i.test(warning));
-    if (parsed.imageUsable !== true || (detections.length === 0 && obstructionWarning)) {
-      const reason = typeof parsed.failureReason === "string" && parsed.failureReason.trim() ? parsed.failureReason.trim().slice(0, 220) : warnings[0] || "The aerial image could not be reviewed reliably.";
-      return json({ error: `${reason} A clean retry is ready.` }, 422);
-    }
-
     return json({
       stalls,
       ada,
       arrows,
       accessAisles,
       confidence: Number.isFinite(confidence) ? Math.max(0, Math.min(1, confidence)) : 0,
-      summary: typeof parsed.summary === "string" ? parsed.summary.slice(0, 300) : "Visible markings analyzed.",
+      summary: typeof verified.summary === "string" ? verified.summary.slice(0, 300) : "Overlapping sections scanned and verified.",
       warnings,
-      detections,
+      occludedRows,
+      requiresManualConfirmation: occludedRows.length > 0,
+      scanPasses: 2,
+      sectionsScanned: sections.length,
+      detections: detections.map(({ type, confidence: detectionConfidence, lat, lng, rowId }) => ({ type, confidence: detectionConfidence, lat, lng, rowId })),
     });
   } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") return json({ error: "The AI lot scan exceeded 105 seconds. Retry once or use a tighter lot outline." }, 504);
-    return json({ error: "The AI lot scan could not be completed." }, 502);
+    if (error instanceof Error && error.name === "AbortError") return json({ error: "The multi-section AI scan exceeded 175 seconds. Retry once or confirm the flagged rows manually." }, 504);
+    return json({ error: error instanceof Error ? `AI lot scan failed: ${error.message}` : "The AI lot scan could not be completed." }, 502);
   } finally {
     clearTimeout(timeout);
   }

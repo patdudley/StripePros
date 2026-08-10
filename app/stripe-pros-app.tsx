@@ -5,6 +5,7 @@ import type { Map as LeafletMap, Marker as LeafletMarker, Polygon as LeafletPoly
 import turfArea from "@turf/area";
 import { PRICE_UNITS, UNIT_LABELS, type PriceUnit } from "@/lib/price-book";
 import { activateTileLayer } from "@/lib/map-imagery";
+import { captureLotScanSections } from "@/lib/lot-scan-capture";
 
 type User = { id: string; email: string; companyName: string };
 type GeocodeResult = { label: string; lat: number; lng: number; provider?: "google" };
@@ -32,7 +33,9 @@ type LotScanResult = DemoCounts & {
   confidence: number;
   summary: string;
   warnings: string[];
-  detections: Array<{ type: DemoMarkingType; x: number; y: number; confidence: number }>;
+  requiresManualConfirmation: boolean;
+  occludedRows: Array<{ sectionId: string; rowId: string; reason: string; confidence: number }>;
+  detections: Array<{ type: DemoMarkingType; lat: number; lng: number; confidence: number; rowId: string }>;
 };
 type PriceItem = {
   id: string;
@@ -214,36 +217,29 @@ function ProductDemo() {
         const map = demoMapRef.current;
         const boundary = demoBoundaryRef.current;
         if (!boundary) throw new Error("The selected lot boundary is missing.");
-        const width = mapElement.clientWidth;
-        const height = mapElement.clientHeight;
         const latLngs = boundary.getLatLngs()[0] as import("leaflet").LatLng[];
-        const boundaryPoints = latLngs.map((latLng) => {
-          const point = map.latLngToContainerPoint(latLng);
-          return { x: Math.max(0, Math.min(1, point.x / width)), y: Math.max(0, Math.min(1, point.y / height)) };
+        const sections = await captureLotScanSections({
+          map,
+          mapElement,
+          boundary: latLngs,
+          maxZoom: Math.min(demoScanZoomRef.current, LOT_REVIEW_ZOOM),
+          signal: controller.signal,
+          onProgress: (completed, total) => setScanProgress(Math.max(12, Math.round((completed / total) * 42))),
         });
-        const { toJpeg } = await import("html-to-image");
-        mapElement.classList.add("clean-scan-capture");
-        await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-        let image: string;
-        try {
-          image = await toJpeg(mapElement, { cacheBust: true, pixelRatio: 1.5, quality: .94, backgroundColor: "#11110f" });
-        } finally {
-          mapElement.classList.remove("clean-scan-capture");
-        }
         const result = await api<LotScanResult>("/api/scan-lot", {
           method: "POST",
           signal: controller.signal,
-          body: JSON.stringify({ address: selectedSite.label, image, boundary: boundaryPoints }),
+          body: JSON.stringify({ address: selectedSite.label, sections }),
         });
         if (controller.signal.aborted || !demoMapRef.current || !demoMapElementRef.current) return;
 
         setDetectedCounts({ stalls: result.stalls, ada: result.ada, arrows: result.arrows, accessAisles: result.accessAisles });
         setScanConfidence(result.confidence);
-        setScanWarnings(result.warnings);
-        setDemoMarkings(result.detections.map((detection, index) => {
-          const point = map.containerPointToLatLng([detection.x * width, detection.y * height]);
-          return { id: `auto-${index}-${crypto.randomUUID()}`, type: detection.type, lat: point.lat, lng: point.lng };
-        }));
+        setScanWarnings([
+          ...result.occludedRows.map((row) => `${row.rowId}: ${row.reason}`),
+          ...result.warnings,
+        ]);
+        setDemoMarkings(result.detections.map((detection, index) => ({ id: `auto-${index}-${crypto.randomUUID()}`, type: detection.type, lat: detection.lat, lng: detection.lng })));
         setScanProgress(100);
         await new Promise((resolve) => window.setTimeout(resolve, 350));
       } catch (caught) {

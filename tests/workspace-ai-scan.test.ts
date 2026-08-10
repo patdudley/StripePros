@@ -11,13 +11,15 @@ describe("live workspace AI scan", () => {
   });
 
   it("creates localized model annotations from every detection", () => {
-    expect(workspaceSource).toContain("map.containerPointToLatLng");
+    expect(workspaceSource).toContain("[detection.lng, detection.lat]");
     expect(workspaceSource).toContain('provenance: "model"');
     expect(workspaceSource).toContain('reviewStatus: "accepted"');
   });
 
-  it("keeps the model results reviewable and rescannable", () => {
+  it("keeps the model results reviewable without the removed workspace-only setup panels", () => {
     expect(workspaceSource).toContain("Review every marker before verifying");
-    expect(workspaceSource).toContain("SCAN AGAIN");
+    expect(workspaceSource).not.toContain("STALL ROW ASSIST");
+    expect(workspaceSource).not.toContain("AI SCAN READY");
+    expect(workspaceSource).toContain("GENERATE THE QUOTE");
   });
 });

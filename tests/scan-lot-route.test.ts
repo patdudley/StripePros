@@ -12,27 +12,28 @@ describe("AI lot scan route", () => {
 
   it("derives totals from localized detections rather than lot area", () => {
     expect(routeSource).toContain('detections.filter((item) => item.type === "stall").length');
-    expect(routeSource).not.toMatch(/area|square feet|sq ft/i);
+    expect(routeSource).toContain("Never estimate from lot area");
   });
 
   it("does not guess markings hidden by blocked zones", () => {
-    expect(routeSource).toContain("omit it and describe the blocked zone");
+    expect(routeSource).toContain("occludedRows");
+    expect(routeSource).toContain("do not silently omit it");
   });
 
   it("localizes visible ADA access aisles without inferring one from an ADA stall", () => {
     expect(routeSource).toContain('item.type === "access_aisle"');
-    expect(routeSource).toContain("Do not assume an access aisle merely because an ADA stall exists");
+    expect(routeSource).toContain("Count access_aisle only for clearly visible ADA hatching");
   });
 
-  it("uses a separately supplied clean-image boundary and rejects obstructed zero results", () => {
-    expect(routeSource).toContain("boundary.length < 3");
-    expect(routeSource).toContain("This is a clean aerial capture with no selection overlay");
-    expect(routeSource).toContain("detections.length === 0 && obstructionWarning");
+  it("uses overlapping clean-image sections and rejects obstructed zero results", () => {
+    expect(routeSource).toContain("sections.length < 2");
+    expect(routeSource).toContain("overlapping high-resolution aerial sections");
+    expect(routeSource).toContain("detections.length === 0 && occludedRows.length > 0");
   });
 
-  it("allows enough time for a dense original-resolution count", () => {
-    expect(routeSource).toContain("105_000");
-    expect(routeSource).toContain('reasoning: { effort: "medium" }');
-    expect(routeSource).toContain("max_output_tokens: 8_000");
+  it("runs a second verification pass and allows enough time for dense crops", () => {
+    expect(routeSource).toContain("runVisionPass(apiKey, address, sections, controller.signal, scout)");
+    expect(routeSource).toContain("175_000");
+    expect(routeSource).toContain("max_output_tokens: 12_000");
   });
 });

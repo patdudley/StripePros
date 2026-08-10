@@ -47,6 +47,16 @@ describe("credible takeoff milestone", () => {
     expect(line.quantity).toBeCloseTo(lineLengthFt(curb), 5);
   });
 
+  it("quotes scanned stop lines by count while preserving manually measured stop-line footage", () => {
+    const scanned = aggregateAnnotationQuote([accepted({ type: "stop_bar", provenance: "model" })])[0];
+    expect(scanned).toMatchObject({ id: "stop_bar_each", unit: "each", quantity: 1, unitPrice: 25 });
+    const drawnLine = { type: "LineString" as const, coordinates: [[-117.13, 32.75], [-117.1299, 32.75]] as [number, number][] };
+    const measured = aggregateAnnotationQuote([accepted({ type: "stop_bar", geometry: drawnLine })])[0];
+    expect(measured.id).toBe("stop_bar");
+    expect(measured.unit).toBe("LF");
+    expect(measured.quantity).toBeCloseTo(lineLengthFt(drawnLine), 5);
+  });
+
   it("subtracts exclusions from pavement area", () => {
     const boundary = { type: "Polygon" as const, coordinates: [[[-117.13, 32.75], [-117.129, 32.75], [-117.129, 32.751], [-117.13, 32.751], [-117.13, 32.75]] as [number, number][]] };
     const exclusion = { type: "Polygon" as const, coordinates: [[[-117.1298, 32.7502], [-117.1296, 32.7502], [-117.1296, 32.7504], [-117.1298, 32.7504], [-117.1298, 32.7502]] as [number, number][]] };

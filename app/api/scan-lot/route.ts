@@ -1,6 +1,6 @@
 import { json } from "@/lib/api";
 
-type DetectionType = "stall" | "ada" | "arrow" | "access_aisle" | "speed_bump";
+type DetectionType = "stall" | "ada" | "arrow" | "access_aisle" | "speed_bump" | "stop_bar";
 type Viewport = { north: number; south: number; east: number; west: number };
 type ScanSection = { id: string; image: string; boundary: Array<{ x: number; y: number }>; viewport: Viewport };
 type ModelDetection = { sectionId: string; rowId: string; type: DetectionType; x: number; y: number; confidence: number };
@@ -62,7 +62,7 @@ function normalizeDetection(value: unknown, sectionIds: Set<string>): ModelDetec
   if (!value || typeof value !== "object") return null;
   const detection = value as Record<string, unknown>;
   if (!sectionIds.has(String(detection.sectionId))) return null;
-  if (detection.type !== "stall" && detection.type !== "ada" && detection.type !== "arrow" && detection.type !== "access_aisle" && detection.type !== "speed_bump") return null;
+  if (detection.type !== "stall" && detection.type !== "ada" && detection.type !== "arrow" && detection.type !== "access_aisle" && detection.type !== "speed_bump" && detection.type !== "stop_bar") return null;
   const x = Number(detection.x);
   const y = Number(detection.y);
   const confidence = Number(detection.confidence);
@@ -150,7 +150,7 @@ function scanSchema(sectionIds: string[]) {
           properties: {
             sectionId: { type: "string", enum: sectionIds },
             rowId: { type: "string" },
-            type: { type: "string", enum: ["stall", "ada", "arrow", "access_aisle", "speed_bump"] },
+            type: { type: "string", enum: ["stall", "ada", "arrow", "access_aisle", "speed_bump", "stop_bar"] },
             x: { type: "number", minimum: 0, maximum: 1 },
             y: { type: "number", minimum: 0, maximum: 1 },
             confidence: { type: "number", minimum: 0, maximum: 1 },
@@ -179,8 +179,8 @@ function scanSchema(sectionIds: string[]) {
 async function runVisionPass(apiKey: string, address: string, sections: ScanSection[], signal: AbortSignal, verificationSource?: ScanPayload) {
   const sectionGuide = sections.map((section) => ({ sectionId: section.id, boundary: section.boundary }));
   const prompt = verificationSource
-    ? `Perform a second, independent verification of a parking-lot takeoff for ${address}. The first pass JSON is below. Recount every section row-by-row from the images; correct missed or false detections rather than merely agreeing with it. Overlapping images may contain the same marking, but still localize it in the clearest section. Keep every genuinely occluded or cut-off row in occludedRows for manual confirmation. Inspect the pixels immediately outside the normalized polygon as context: if the polygon edge cuts through a visible parking row or drive aisle, add an occludedRows entry whose rowId begins boundary-edge- and whose reason says which edge must be expanded. Never call a boundary-truncated scan complete. Never estimate from lot area.\nFIRST PASS:\n${JSON.stringify(verificationSource).slice(0, 45_000)}\nSECTION BOUNDARIES:\n${JSON.stringify(sectionGuide)}`
-    : `Review this single focused high-resolution aerial section for ${address}. Count only pixels inside its normalized polygon: ${JSON.stringify(sectionGuide)}. First enumerate every parking row and every drive aisle. Then inspect each row from one end to the other and assign a stable rowId such as north-01 or east-02. Return one localized detection centered in every visible marking. A stall is one non-ADA parking space bounded by visible separator lines or clearly visible separator endpoints; count it even when a parked vehicle or canopy hides the stall interior, provided both boundaries are visually supported. Never derive a row count from length or lot area. An ADA stall is separate and must not also be a standard stall. Traverse every drive aisle from end to end and count every painted directional arrow whose arrowhead and shaft are visually supported, including repeated arrows in sequence. Count access_aisle only for clearly visible ADA hatching or a striped accessible path. Count speed_bump once for each clearly visible transverse raised speed bump or speed hump spanning a drive aisle; do not confuse stop bars, crosswalks, shadows, or pavement seams with speed bumps. If the boundaries needed to verify a stall or marking are hidden by trees, deep shadows, roofs, solar canopies, or image edges, do not invent it: put that specific row in occludedRows for manual confirmation. Inspect the visible context immediately outside the polygon too. If a polygon edge cuts through or excludes a continuous visible parking row or drive aisle, add an occludedRows entry whose rowId begins boundary-edge- and state which edge the user must expand. Do not silently omit an uncertain or boundary-truncated row. Ignore buildings, curbs, islands, lane lines, crosswalk bars, and UI. Overlap with neighboring sections is expected and will be merged geographically.`;
+    ? `Perform a second, independent verification of a parking-lot takeoff for ${address}. The first pass JSON is below. Recount every section row-by-row from the images; correct missed or false detections rather than merely agreeing with it. Apply the strict ADA rule again: classify a stall as ada only when blue paint belonging to that stall or a legible wheelchair symbol is visible. A nearby access aisle, path of travel, curb ramp, or hatching never proves the adjacent stall is ADA. Keep paths and stalls as independent detections. Verify every solid transverse stop_bar at a stop sign or stop position independently from crosswalks and speed bumps. Overlapping images may contain the same marking, but still localize it in the clearest section. Keep every genuinely occluded or cut-off row in occludedRows for manual confirmation. Inspect the pixels immediately outside the normalized polygon as context: if the polygon edge cuts through a visible parking row or drive aisle, add an occludedRows entry whose rowId begins boundary-edge- and whose reason says which edge must be expanded. Never call a boundary-truncated scan complete. Never estimate from lot area.\nFIRST PASS:\n${JSON.stringify(verificationSource).slice(0, 45_000)}\nSECTION BOUNDARIES:\n${JSON.stringify(sectionGuide)}`
+    : `Review this single focused high-resolution aerial section for ${address}. Count only pixels inside its normalized polygon: ${JSON.stringify(sectionGuide)}. First enumerate every parking row and every drive aisle. Then inspect each row from one end to the other and assign a stable rowId such as north-01 or east-02. Return one localized detection centered in every visible marking. A stall is one non-ADA parking space bounded by visible separator lines or clearly visible separator endpoints; count it even when a parked vehicle or canopy hides the stall interior, provided both boundaries are visually supported. Never derive a row count from length or lot area. ADA CLASSIFICATION IS STRICT: classify a stall as ada only when visible blue paint belongs to that stall (blue field, blue border, or blue curb directly identifying it) or a legible wheelchair accessibility symbol is visible inside it. Do not classify an ADA stall solely because an access aisle, path of travel, curb ramp, or diagonal hatching is beside it. A path can exist without an ADA stall. Count that path independently as access_aisle, and count the adjacent space as a standard stall when its separator lines are visible but no blue or wheelchair evidence is visible. Never output both stall and ada for the same space. Traverse every drive aisle from end to end and count every painted directional arrow whose arrowhead and shaft are visually supported, including repeated arrows in sequence. Count access_aisle for each clearly visible striped access aisle or path of travel, independent of whether any adjacent stall qualifies as ADA. Count stop_bar once for every clearly visible solid transverse painted stop line at a stop sign, stop stencil, driveway exit, or controlled parking-lot intersection; do not count crosswalk bars, stall end lines, curbs, shadows, pavement seams, or lane dividers as stop_bar. Count speed_bump once for each clearly visible transverse raised speed bump or speed hump spanning a drive aisle; do not confuse stop bars, crosswalks, shadows, or pavement seams with speed bumps. If the boundaries needed to verify a stall or marking are hidden by trees, deep shadows, roofs, solar canopies, or image edges, do not invent it: put that specific row in occludedRows for manual confirmation. Inspect the visible context immediately outside the polygon too. If a polygon edge cuts through or excludes a continuous visible parking row or drive aisle, add an occludedRows entry whose rowId begins boundary-edge- and state which edge the user must expand. Do not silently omit an uncertain or boundary-truncated row. Ignore buildings, curbs, islands, ordinary lane lines, crosswalk bars, and UI. Overlap with neighboring sections is expected and will be merged geographically.`;
   const content: Array<Record<string, unknown>> = [{ type: "input_text", text: prompt }];
   for (const section of sections) {
     content.push({ type: "input_text", text: `Image ${section.id}. Its countable boundary is ${JSON.stringify(section.boundary)}.` });
@@ -262,14 +262,16 @@ export async function POST(request: Request) {
     const arrows = detections.filter((item) => item.type === "arrow").length;
     const accessAisles = detections.filter((item) => item.type === "access_aisle").length;
     const speedBumps = detections.filter((item) => item.type === "speed_bump").length;
+    const stopBars = detections.filter((item) => item.type === "stop_bar").length;
     const boundaryIncomplete = occludedRows.some((row) => row.rowId.startsWith("boundary-edge-") || /(?:boundary|polygon|outline).*(?:cuts|excludes|truncates|expand)/i.test(row.reason));
-    console.info("lot-scan:complete", { durationMs: Date.now() - scanStartedAt, sections: sections.length, stalls, ada, arrows, accessAisles, speedBumps, occludedRows: occludedRows.length });
+    console.info("lot-scan:complete", { durationMs: Date.now() - scanStartedAt, sections: sections.length, stalls, ada, arrows, accessAisles, speedBumps, stopBars, occludedRows: occludedRows.length });
     return json({
       stalls,
       ada,
       arrows,
       accessAisles,
       speedBumps,
+      stopBars,
       confidence: Number.isFinite(confidence) ? Math.max(0, Math.min(1, confidence)) : 0,
       summary: typeof verified.summary === "string" ? verified.summary.slice(0, 300) : "Overlapping sections scanned and verified.",
       warnings,

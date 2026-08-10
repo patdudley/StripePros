@@ -24,7 +24,16 @@ describe("AI lot scan route", () => {
 
   it("localizes visible ADA access aisles without inferring one from an ADA stall", () => {
     expect(routeSource).toContain('item.type === "access_aisle"');
-    expect(routeSource).toContain("Count access_aisle only for clearly visible ADA hatching");
+    expect(routeSource).toContain("A path can exist without an ADA stall");
+    expect(routeSource).toContain("Do not classify an ADA stall solely because an access aisle");
+    expect(routeSource).toContain("visible blue paint belongs to that stall");
+  });
+
+  it("counts solid stop lines independently from arrows, crosswalks, and speed bumps", () => {
+    expect(routeSource).toContain('item.type === "stop_bar"');
+    expect(routeSource).toContain('"stop_bar"');
+    expect(routeSource).toContain("Count stop_bar once for every clearly visible solid transverse painted stop line");
+    expect(routeSource).toContain("const stopBars = detections.filter");
   });
 
   it("detects speed bumps as localized scope instead of inferring them", () => {

@@ -20,6 +20,7 @@ export const DEFAULT_TAKEOFF_PRICES: Record<string, number> = {
   speed_bump: 35,
   crosswalk: 75,
   stop_bar: 3,
+  stop_bar_each: 25,
   wheel_stop: 15,
   painted_text: 8,
   painted_curb: 1.75,
@@ -46,8 +47,9 @@ export function aggregateAnnotationQuote(
   for (const annotation of accepted) {
     const key = annotation.type === "standard_stall" || annotation.type === "ada_stall"
       ? serviceKey(annotation.type, annotation.service)
+      : annotation.type === "stop_bar" && annotation.geometry.type !== "LineString" ? "stop_bar_each"
       : annotation.type;
-    const isLength = annotation.type === "painted_curb" || annotation.type === "stop_bar";
+    const isLength = annotation.type === "painted_curb" || (annotation.type === "stop_bar" && annotation.geometry.type === "LineString");
     const isText = annotation.type === "painted_text";
     const quantity = isLength && annotation.geometry.type === "LineString"
       ? lineLengthFt(annotation.geometry)
@@ -57,11 +59,12 @@ export function aggregateAnnotationQuote(
       standard_stall_new_layout: "Standard stalls — new layout",
       ada_stall_restripe: "ADA stalls — restripe",
       ada_stall_new_layout: "ADA stalls — new layout",
-      ada_access_aisle: "ADA access aisles / hatching",
+      ada_access_aisle: "Paths of travel / access aisles",
       directional_arrow: "Directional arrows",
       speed_bump: "Speed bumps",
       crosswalk: "Crosswalks",
-      stop_bar: "Stop bars",
+      stop_bar: "Solid stop lines",
+      stop_bar_each: "Solid stop lines",
       wheel_stop: "Wheel stops",
       painted_text: "Painted text / stencils",
       painted_curb: "Painted curb",

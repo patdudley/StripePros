@@ -35,13 +35,14 @@ type LotScanResult = {
   arrows: number;
   accessAisles: number;
   speedBumps: number;
+  stopBars: number;
   confidence: number;
   summary: string;
   warnings: string[];
   requiresManualConfirmation: boolean;
   boundaryIncomplete: boolean;
   occludedRows: Array<{ sectionId: string; rowId: string; reason: string; confidence: number }>;
-  detections: Array<{ type: "stall" | "ada" | "arrow" | "access_aisle" | "speed_bump"; lat: number; lng: number; confidence: number; rowId: string }>;
+  detections: Array<{ type: "stall" | "ada" | "arrow" | "access_aisle" | "speed_bump" | "stop_bar"; lat: number; lng: number; confidence: number; rowId: string }>;
 };
 type DrawShape = "Polygon" | "Line" | "Marker";
 type DrawIntent = "boundary" | "exclusion" | "row" | AnnotationType | null;
@@ -70,11 +71,11 @@ function estimatedScanPercent(elapsedMs: number) {
 const TYPE_LABELS: Record<AnnotationType, string> = {
   standard_stall: "Standard stall",
   ada_stall: "ADA stall",
-  ada_access_aisle: "ADA aisle / hatching",
+  ada_access_aisle: "Path of travel / access aisle",
   directional_arrow: "Directional arrow",
   speed_bump: "Speed bump",
   crosswalk: "Crosswalk",
-  stop_bar: "Stop bar",
+  stop_bar: "Solid stop line",
   wheel_stop: "Wheel stop",
   painted_text: "Painted text / stencil",
   painted_curb: "Painted curb line",
@@ -538,7 +539,7 @@ export function CredibleTakeoffWorkspace() {
     setScanError("");
     setScanWarnings([]);
     setCountsVerified(false);
-    setMessage("AI scan running: locating visible stalls, ADA spaces, access aisles, and directional arrows…");
+    setMessage("AI scan running: locating visible stalls, blue ADA spaces, paths, arrows, speed bumps, and stop lines…");
     const startedAt = performance.now();
     const progressTimer = window.setInterval(() => setScanProgress(estimatedScanPercent(performance.now() - startedAt)), 700);
     try {
@@ -563,7 +564,7 @@ export function CredibleTakeoffWorkspace() {
       if (!response.ok) throw new Error(result.error ?? "The AI scan could not be completed.");
 
       const modelAnnotations: TakeoffAnnotation[] = result.detections.map((detection, index) => {
-        const type: AnnotationType = detection.type === "stall" ? "standard_stall" : detection.type === "ada" ? "ada_stall" : detection.type === "access_aisle" ? "ada_access_aisle" : detection.type === "speed_bump" ? "speed_bump" : "directional_arrow";
+        const type: AnnotationType = detection.type === "stall" ? "standard_stall" : detection.type === "ada" ? "ada_stall" : detection.type === "access_aisle" ? "ada_access_aisle" : detection.type === "speed_bump" ? "speed_bump" : detection.type === "stop_bar" ? "stop_bar" : "directional_arrow";
         return {
           id: `model-${crypto.randomUUID()}-${index}`,
           type,
@@ -582,7 +583,7 @@ export function CredibleTakeoffWorkspace() {
       setScanProgress(100);
       setMessage(result.requiresManualConfirmation
         ? `${modelAnnotations.length} visible markings counted. Manual confirmation required for ${result.occludedRows.length} occluded row${result.occludedRows.length === 1 ? "" : "s"}: ${result.occludedRows.map((row) => row.rowId).join(", ")}.`
-        : `${modelAnnotations.length} visible markings counted: ${result.stalls} standard stalls, ${result.ada} ADA, ${result.accessAisles} ADA paths / access aisles, ${result.arrows} arrows, ${result.speedBumps} speed bumps. Review every marker before verifying.`);
+        : `${modelAnnotations.length} visible markings counted: ${result.stalls} standard stalls, ${result.ada} blue ADA stalls, ${result.accessAisles} paths / access aisles, ${result.arrows} arrows, ${result.speedBumps} speed bumps, ${result.stopBars} solid stop lines. Review every marker before verifying.`);
       await new Promise((resolve) => window.setTimeout(resolve, 350));
     } catch (error) {
       const detail = error instanceof Error ? error.message : "The AI scan could not be completed.";
@@ -717,9 +718,10 @@ export function CredibleTakeoffWorkspace() {
         <div className="quote-lines workspace-home-quote-lines">
           <div><span>Standard stalls — restripe <small>{counters.standard_stall ?? 0} × {currency.format(prices.standard_stall)}</small></span><b>{currency.format((counters.standard_stall ?? 0) * prices.standard_stall)}</b></div>
           <div><span>ADA stalls + symbols <small>{counters.ada_stall ?? 0} × {currency.format(prices.ada_stall)}</small></span><b>{currency.format((counters.ada_stall ?? 0) * prices.ada_stall)}</b></div>
-          <div><span>ADA paths / access aisles <small>{counters.ada_access_aisle ?? 0} × {currency.format(prices.ada_access_aisle)}</small></span><b>{currency.format((counters.ada_access_aisle ?? 0) * prices.ada_access_aisle)}</b></div>
+          <div><span>Paths of travel / access aisles <small>{counters.ada_access_aisle ?? 0} × {currency.format(prices.ada_access_aisle)}</small></span><b>{currency.format((counters.ada_access_aisle ?? 0) * prices.ada_access_aisle)}</b></div>
           <div><span>Directional arrows <small>{counters.directional_arrow ?? 0} × {currency.format(prices.directional_arrow)}</small></span><b>{currency.format((counters.directional_arrow ?? 0) * prices.directional_arrow)}</b></div>
           <div><span>Speed bumps <small>{counters.speed_bump ?? 0} × {currency.format(prices.speed_bump)}</small></span><b>{currency.format((counters.speed_bump ?? 0) * prices.speed_bump)}</b></div>
+          <div><span>Solid stop lines <small>{counters.stop_bar ?? 0} × {currency.format(prices.stop_bar_each)}</small></span><b>{currency.format((counters.stop_bar ?? 0) * prices.stop_bar_each)}</b></div>
         </div>
         <div className="quote-total workspace-home-quote-total"><span>DRAFT TOTAL</span><strong>{currency.format(calculation.total)}</strong></div>
         <div className="quote-ready workspace-home-quote-ready"><span>{scanError || scanWarnings.length ? "!" : "✓"}</span><div><b>{scanError ? "MANUAL COUNT REQUIRED" : scanWarnings.length ? "OCCLUDED ROWS NEED CONFIRMATION" : "AI SCAN COMPLETE — VERIFY BEFORE SENDING"}</b><small>{scanError || scanWarnings[0] || "Automatic counts can be corrected for trees, shadows, or faded markings"}</small></div></div>

@@ -54,6 +54,8 @@ const number = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
 const ESRI_IMAGERY_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
 const DEFAULT_CENTER: [number, number] = [32.7849, -117.1258];
 const MAP_CLASS_NAME = "live-map";
+const ADDRESS_ZOOM = 19.5;
+const LOT_REVIEW_ZOOM = 20.25;
 
 const TYPE_LABELS: Record<AnnotationType, string> = {
   standard_stall: "Standard stall",
@@ -463,7 +465,7 @@ export function CredibleTakeoffWorkspace() {
     setAddress(site.label); setSiteAddress(site.label); setSelectedSite(site); setResults([]);
     setSuggestions([]); setSuggesting(false); setActiveSuggestion(-1); setSearchError("");
     setMessage("Address found. Draw the actual parking-lot boundary. Counts start at zero.");
-    mapRef.current?.flyTo([site.lat, site.lng], 19, { duration: 1 });
+    mapRef.current?.flyTo([site.lat, site.lng], ADDRESS_ZOOM, { duration: .55 });
     void loadAerialImagery(site);
   }
 
@@ -505,7 +507,7 @@ export function CredibleTakeoffWorkspace() {
     setMessage("AI scan running: locating visible stalls, ADA spaces, access aisles, and directional arrows…");
     try {
       const boundaryPoints = selectedBoundary.coordinates[0].map(([lng, lat]) => [lat, lng] as [number, number]);
-      map.fitBounds(boundaryPoints, { padding: [42, 42], maxZoom: imageryInfo.maxZoom, animate: false });
+      map.fitBounds(boundaryPoints, { padding: [72, 72], maxZoom: Math.min(imageryInfo.maxZoom, LOT_REVIEW_ZOOM), animate: true, duration: .45 });
       map.invalidateSize(false);
       await new Promise((resolve) => window.setTimeout(resolve, 900));
 

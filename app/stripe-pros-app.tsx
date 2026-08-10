@@ -45,6 +45,8 @@ type PriceItem = {
 };
 
 const ESRI_IMAGERY_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+const ADDRESS_ZOOM = 19.5;
+const LOT_REVIEW_ZOOM = 20.25;
 
 async function api<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, { ...options, headers: { "Content-Type": "application/json", ...options?.headers } });
@@ -141,7 +143,7 @@ function ProductDemo() {
       demoLeafletRef.current = L;
       (window as unknown as { L: typeof L }).L = L;
       await import("@geoman-io/leaflet-geoman-free");
-      map = L.map(demoMapElementRef.current, { center: [32.7849, -117.1258], zoom: 18, zoomControl: false, attributionControl: true, zoomAnimation: false, fadeAnimation: false, dragging: false, scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false, touchZoom: false });
+      map = L.map(demoMapElementRef.current, { center: [32.7849, -117.1258], zoom: 18, zoomControl: false, zoomSnap: .25, attributionControl: true, zoomAnimation: true, fadeAnimation: true, dragging: false, scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false, touchZoom: false });
       demoMapRef.current = map;
       demoTileLayerRef.current = L.tileLayer(ESRI_IMAGERY_URL, { maxZoom: 19, maxNativeZoom: 19, crossOrigin: "anonymous", attribution: "Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community" }).addTo(map);
       map.on("pm:create", (rawEvent) => {
@@ -161,7 +163,7 @@ function ProductDemo() {
         setSelectingLot(false);
         setScanStage(0);
         setPhase("scanning");
-        map.fitBounds(boundary.getBounds(), { padding: [34, 34], maxZoom: demoScanZoomRef.current, animate: false });
+        map.fitBounds(boundary.getBounds(), { padding: [68, 68], maxZoom: Math.min(demoScanZoomRef.current, LOT_REVIEW_ZOOM), animate: true, duration: .45 });
       });
       map.on("click", (event) => {
         const type = demoMarkingToolRef.current;
@@ -427,7 +429,7 @@ function ProductDemo() {
     setActiveSuggestion(-1);
     setSearchError("");
     demoMapRef.current?.stop();
-    demoMapRef.current?.setView([site.lat, site.lng], 18, { animate: false });
+    demoMapRef.current?.setView([site.lat, site.lng], ADDRESS_ZOOM, { animate: true, duration: .45 });
   }
 
   async function startScan(event: FormEvent<HTMLFormElement>) {
@@ -445,7 +447,7 @@ function ProductDemo() {
       setSelectedSite(site);
       if (!hadSelectedSite) {
         demoMapRef.current?.stop();
-        demoMapRef.current?.setView([site.lat, site.lng], 18, { animate: false });
+        demoMapRef.current?.setView([site.lat, site.lng], ADDRESS_ZOOM, { animate: true, duration: .45 });
         await configureDemoImagery(site);
       }
       beginDemoLotSelection();

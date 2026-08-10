@@ -12,6 +12,7 @@
     "test": "vitest run --config vitest.config.ts",
     "test:ui": "vitest --config vitest.config.ts",
     "evaluate:lots": "node scripts/evaluate-lot-training.mjs",
+    "fetch:fixture": "tsx scripts/fetch-fixtures.ts",
     "scan:fixture": "tsx scripts/run-fixture-scan.ts",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",

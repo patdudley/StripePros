@@ -94,7 +94,7 @@ export async function POST(request: Request) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-5.6-terra",
+        model: "gpt-5.6",
         reasoning: { effort: "high" },
         input: [{
           role: "user",

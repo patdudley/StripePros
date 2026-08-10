@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { Layer as LeafletLayer, Map as LeafletMap, TileLayer } from "leaflet";
 import Link from "next/link";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import { toPng } from "html-to-image";
+import { toJpeg, toPng } from "html-to-image";
 import { activateTileLayer } from "@/lib/map-imagery";
 import { calculateQuote } from "@/lib/quote-math";
 import { pavementAreaSqFt } from "@/lib/takeoff/geometry";
@@ -26,6 +26,15 @@ type MapImageryConfig = {
 };
 type SavedEstimate = { id: string; address: string; total: number; measurements: number; updatedAt: string };
 type IntegrationStatus = { jobber: boolean; quickbooks: boolean; hubspot: boolean; webhook: boolean };
+type LotScanResult = {
+  stalls: number;
+  ada: number;
+  arrows: number;
+  confidence: number;
+  summary: string;
+  warnings: string[];
+  detections: Array<{ type: "stall" | "ada" | "arrow"; x: number; y: number; confidence: number }>;
+};
 type DrawShape = "Polygon" | "Line" | "Marker";
 type DrawIntent = "boundary" | "exclusion" | "row" | AnnotationType | null;
 type DrawLayer = LeafletLayer & {
@@ -150,6 +159,10 @@ export function CredibleTakeoffWorkspace() {
   const [message, setMessage] = useState("Search an address, draw the lot, then create a manual takeoff.");
   const [saved, setSaved] = useState<SavedEstimate[]>([]);
   const [exporting, setExporting] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [scanConfidence, setScanConfidence] = useState<number | null>(null);
+  const [scanWarnings, setScanWarnings] = useState<string[]>([]);
+  const [scanError, setScanError] = useState("");
 
   annotationsRef.current = annotations;
 
@@ -240,7 +253,11 @@ export function CredibleTakeoffWorkspace() {
       redoRef.current = [];
       setBoundaryEditing(false);
       setCountsVerified(false);
-      setMessage("Lot selected. Automatic detection is not configured. Continue with manual takeoff.");
+      setScanConfidence(null);
+      setScanWarnings([]);
+      setScanError("");
+      setMessage("Lot selected. Preparing the aerial image for AI counting…");
+      window.setTimeout(() => void runAiScan(geometry), 450);
       return;
     }
     if (intent === "exclusion" && geometry.type === "Polygon") {
@@ -401,6 +418,7 @@ export function CredibleTakeoffWorkspace() {
   function clearMapWork() {
     setBoundary(null); setExclusions([]); setSelectedExclusionId(null); replaceAnnotations([], false); setSelectedAnnotationId(null); setRowBaseline(null);
     setCountsVerified(false); undoRef.current = []; redoRef.current = [];
+    setScanning(false); setScanConfidence(null); setScanWarnings([]); setScanError("");
   }
 
   function selectAddress(site: GeocodeResult) {
@@ -432,6 +450,69 @@ export function CredibleTakeoffWorkspace() {
   function removeAnnotation(id: string) {
     replaceAnnotations(annotationsRef.current.filter((item) => item.id !== id));
     if (selectedAnnotationId === id) setSelectedAnnotationId(null);
+  }
+
+  async function runAiScan(selectedBoundary = boundary) {
+    const map = mapRef.current;
+    const mapElement = mapElementRef.current;
+    if (!selectedBoundary || !map || !mapElement) {
+      setMessage("Draw the parking-lot boundary before scanning.");
+      return;
+    }
+
+    setScanning(true);
+    setScanError("");
+    setScanWarnings([]);
+    setCountsVerified(false);
+    setMessage("AI scan running: locating visible stalls, ADA spaces, and directional arrows…");
+    try {
+      const boundaryPoints = selectedBoundary.coordinates[0].map(([lng, lat]) => [lat, lng] as [number, number]);
+      map.fitBounds(boundaryPoints, { padding: [42, 42], maxZoom: imageryInfo.maxZoom, animate: false });
+      map.invalidateSize(false);
+      await new Promise((resolve) => window.setTimeout(resolve, 900));
+
+      const image = await toJpeg(mapElement, {
+        cacheBust: true,
+        pixelRatio: 2,
+        quality: .94,
+        backgroundColor: "#11110f",
+        filter: (node) => !(node instanceof HTMLElement && node.classList.contains("leaflet-control-attribution")),
+      });
+      const response = await fetch("/api/scan-lot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ address: siteAddress, image }),
+      });
+      const result = await response.json() as LotScanResult & { error?: string };
+      if (!response.ok) throw new Error(result.error ?? "The AI scan could not be completed.");
+
+      const width = mapElement.clientWidth;
+      const height = mapElement.clientHeight;
+      const modelAnnotations: TakeoffAnnotation[] = result.detections.map((detection, index) => {
+        const point = map.containerPointToLatLng([detection.x * width, detection.y * height]);
+        const type: AnnotationType = detection.type === "stall" ? "standard_stall" : detection.type === "ada" ? "ada_stall" : "directional_arrow";
+        return {
+          id: `model-${crypto.randomUUID()}-${index}`,
+          type,
+          label: `${TYPE_LABELS[type]} ${index + 1}`,
+          geometry: { type: "Point", coordinates: [point.lng, point.lat] },
+          provenance: "model",
+          reviewStatus: "accepted",
+          service,
+        };
+      });
+      const manualAnnotations = annotationsRef.current.filter((annotation) => annotation.provenance !== "model");
+      replaceAnnotations([...manualAnnotations, ...modelAnnotations]);
+      setScanConfidence(result.confidence);
+      setScanWarnings(result.warnings);
+      setMessage(`${modelAnnotations.length} visible markings counted: ${result.stalls} standard stalls, ${result.ada} ADA, ${result.arrows} arrows. Review every marker before verifying.`);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "The AI scan could not be completed.";
+      setScanError(detail);
+      setMessage(`${detail} Use the manual tools or retry the scan.`);
+    } finally {
+      setScanning(false);
+    }
   }
 
   function commitRow() {
@@ -512,7 +593,7 @@ export function CredibleTakeoffWorkspace() {
     <header className="quote-app-header">
       <Link className="quote-brand" href="/"><BrandMark /><span>STRIPE PROS</span></Link>
       <div className="quote-header-site"><span>TAKEOFF</span><strong>{siteAddress}</strong><small>{boundary ? `${number.format(pavementArea)} SQ FT PAVEMENT · ${acceptedAnnotations.length} ACCEPTED` : "ADDRESS → BOUNDARY → ANNOTATIONS → QUOTE"}</small></div>
-      <div className="quote-header-actions"><span className="autosave-status"><i /> MANUAL TAKEOFF</span><button onClick={() => void saveEstimate()}>SAVE DRAFT</button><button className="export-button" onClick={() => void exportProposal()} disabled={exporting || !canExport}>{exporting ? "GENERATING…" : "EXPORT PROPOSAL"} <b>→</b></button></div>
+      <div className="quote-header-actions"><span className="autosave-status"><i /> {scanning ? "AI SCANNING" : "AI + MANUAL TAKEOFF"}</span><button onClick={() => void saveEstimate()}>SAVE DRAFT</button><button className="export-button" onClick={() => void exportProposal()} disabled={exporting || !canExport}>{exporting ? "GENERATING…" : "EXPORT PROPOSAL"} <b>→</b></button></div>
     </header>
     <aside className="quote-sidebar">
       <p>WORKSPACE</p>
@@ -532,17 +613,18 @@ export function CredibleTakeoffWorkspace() {
         {results.length > 1 && <div className="address-results">{results.map((result) => <button key={`${result.lat}-${result.lng}`} onClick={() => selectAddress(result)}>{result.label}</button>)}</div>}
         {searchError && <p className="workspace-error">{searchError}</p>}
       </div>
-      <div className="map-stage">
+      <div className={`map-stage ${scanning ? "scanning" : ""}`}>
         <div ref={mapElementRef} className={MAP_CLASS_NAME} data-drawing={Boolean(drawingIntent)} />
         <div className="map-workflow-strip"><button className={!boundary ? "primary" : ""} onClick={() => startDraw("boundary")}>{boundary ? "REDRAW LOT" : "1 · DRAW LOT"}</button><button disabled={!boundary} onClick={() => startDraw("exclusion")}>＋ EXCLUSION</button><button disabled={!boundary} onClick={() => setBoundaryEditing((value) => !value)}>{boundaryEditing ? "SAVE BOUNDARY" : "EDIT BOUNDARY"}</button></div>
         {Boolean(exclusions.length) && <div className="exclusion-list"><strong>EXCLUSIONS</strong>{exclusions.map((exclusion) => <div key={exclusion.id}><button className={selectedExclusionId === exclusion.id ? "selected" : ""} onClick={() => setSelectedExclusionId(exclusion.id)}>{exclusion.type.replaceAll("_", " ")}</button><button aria-label={`Delete ${exclusion.type} exclusion`} onClick={() => { setExclusions((current) => current.filter((item) => item.id !== exclusion.id)); if (selectedExclusionId === exclusion.id) setSelectedExclusionId(null); }}>×</button></div>)}</div>}
         <div className="map-history-tools"><button onClick={undo} disabled={!undoRef.current.length}>↶ UNDO</button><button onClick={redo} disabled={!redoRef.current.length}>↷ REDO</button></div>
         {drawingIntent && <div className="drawing-status">DRAWING {String(drawingIntent).replaceAll("_", " ").toUpperCase()} · CLICK MAP TO COMPLETE</div>}
+        {scanning && <div className="workspace-scan-line"><span>AI SCANNING SELECTED LOT</span></div>}
         <div className="takeoff-message"><strong>{message}</strong></div>
       </div>
       <aside className="estimate-panel annotation-panel">
         <div className="estimate-panel-head"><div><p>ANNOTATION-DRIVEN QUOTE</p><h1>{currency.format(calculation.total)}</h1></div><span>{countsVerified ? "VERIFIED" : "REVIEW"}</span></div>
-        <div className="detection-status"><i>!</i><span><strong>AUTOMATIC DETECTION NOT CONFIGURED</strong><small>Continue with the manual row and annotation tools below.</small></span></div>
+        <div className={`detection-status ${scanError ? "error" : scanning ? "running" : scanConfidence !== null ? "ready" : ""}`}><i>{scanError ? "!" : scanning ? "⌁" : scanConfidence !== null ? "✓" : "AI"}</i><span><strong>{scanError ? "AI SCAN NEEDS ATTENTION" : scanning ? "COUNTING VISIBLE MARKINGS" : scanConfidence !== null ? `AI SCAN COMPLETE · ${Math.round(scanConfidence * 100)}% CONFIDENCE` : "AI SCAN READY"}</strong><small>{scanError || scanWarnings[0] || (boundary ? "Review the localized markers, then verify the counts." : "Draw the lot boundary to count visible markings.")}</small></span>{boundary && !scanning && <button onClick={() => void runAiScan()}>SCAN AGAIN</button>}</div>
         <section className="row-assist-panel">
           <div className="panel-section-title"><span>STALL ROW ASSIST</span><small>MOST ACCURATE MANUAL TOOL</small></div>
           <button className="row-baseline-button" disabled={!boundary} onClick={() => startDraw("row")}>{rowBaseline ? "REDRAW ROW BASELINE" : "CLICK ROW START + END"}</button>

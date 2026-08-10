@@ -216,6 +216,7 @@ function ProductDemo() {
           pixelRatio: 2,
           quality: .94,
           backgroundColor: "#11110f",
+          filter: (node) => !(node instanceof HTMLElement && node.classList.contains("leaflet-control-attribution")),
         });
         const result = await api<LotScanResult>("/api/scan-lot", {
           method: "POST",

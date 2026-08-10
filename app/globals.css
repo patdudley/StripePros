@@ -637,6 +637,15 @@ button { cursor: pointer; }
 .detection-status span { display: grid; gap: 2px; }
 .detection-status strong { font: 900 7px monospace; letter-spacing: .08em; }
 .detection-status small { color: #777168; font-size: 7px; }
+.detection-status > button { border: 1px solid var(--ink); background: var(--ink); color: var(--amber); padding: 7px 9px; font: 900 7px monospace; letter-spacing: .06em; white-space: nowrap; }
+.detection-status.ready { border-color: #5ca46b; background: #eff9f0; }
+.detection-status.ready i { background: #74e08b; }
+.detection-status.running i { animation: scanPulse .7s ease-in-out infinite alternate; }
+.detection-status.error { border-color: #c94f36; background: #fff0ed; }
+.workspace-scan-line { position: absolute; z-index: 810; inset: 0; overflow: hidden; pointer-events: none; background: rgba(255,180,0,.05); }
+.workspace-scan-line::after { content: ""; position: absolute; left: 0; right: 0; height: 3px; background: var(--amber); box-shadow: 0 0 22px 8px rgba(255,180,0,.45); animation: workspaceScan 1.5s linear infinite; }
+.workspace-scan-line span { position: absolute; top: 72px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--amber); padding: 8px 12px; font: 900 7px monospace; letter-spacing: .1em; }
+@keyframes workspaceScan { from { top: 12%; } to { top: 88%; } }
 .row-assist-panel, .typed-tools, .annotation-counters, .annotation-review-list { padding: 13px 16px; border-bottom: 1px solid #dedbd2; }
 .row-baseline-button { width: 100%; height: 33px; border: 0; background: var(--ink); color: var(--amber); font: 900 7px Arial; letter-spacing: .08em; }
 .row-baseline-button:disabled { opacity: .42; }

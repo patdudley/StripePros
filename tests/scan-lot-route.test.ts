@@ -5,7 +5,7 @@ const routeSource = readFileSync(new URL("../app/api/scan-lot/route.ts", import.
 
 describe("AI lot scan route", () => {
   it("analyzes the actual aerial capture with the vision model", () => {
-    expect(routeSource).toContain('model: "gpt-5.6-terra"');
+    expect(routeSource).toContain('model: "gpt-5.6"');
     expect(routeSource).toContain('detail: "original"');
     expect(routeSource).toContain('type: "input_image"');
   });

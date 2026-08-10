@@ -25,7 +25,7 @@ type DemoBoundary = LeafletPolygon & {
 };
 type DemoGeomanMap = LeafletMap & { pm: { enableDraw(shape: "Polygon", options?: Record<string, unknown>): void; disableDraw(): void } };
 type DemoMarkingType = "stall" | "ada" | "arrow" | "access_aisle";
-type DemoMarking = { id: string; type: DemoMarkingType; lat: number; lng: number; source: "auto" | "manual" };
+type DemoMarking = { id: string; type: DemoMarkingType; lat: number; lng: number };
 type DemoCounts = { stalls: number; ada: number; arrows: number; accessAisles: number };
 const EMPTY_DEMO_COUNTS: DemoCounts = { stalls: 0, ada: 0, arrows: 0, accessAisles: 0 };
 type LotScanResult = DemoCounts & {
@@ -114,7 +114,6 @@ function ProductDemo() {
   const demoImagerySignatureRef = useRef(`esri:${ESRI_IMAGERY_URL}:19`);
   const demoBoundaryRef = useRef<DemoBoundary | null>(null);
   const demoMarkingLayersRef = useRef(new Map<string, LeafletMarker>());
-  const demoMarkingToolRef = useRef<DemoMarkingType | null>(null);
   const demoScanZoomRef = useRef(19);
   const [phase, setPhase] = useState<"typing" | "selecting" | "scanning" | "quote">("typing");
   const [address, setAddress] = useState("");
@@ -130,7 +129,6 @@ function ProductDemo() {
   const [lotArea, setLotArea] = useState(0);
   const [demoMarkings, setDemoMarkings] = useState<DemoMarking[]>([]);
   const [detectedCounts, setDetectedCounts] = useState<DemoCounts>(EMPTY_DEMO_COUNTS);
-  const [markingTool, setMarkingToolState] = useState<DemoMarkingType | null>(null);
   const [scanStage, setScanStage] = useState(0);
   const [scanProgress, setScanProgress] = useState(0);
   const [scanError, setScanError] = useState("");
@@ -171,12 +169,6 @@ function ProductDemo() {
         setPhase("scanning");
         map.fitBounds(boundary.getBounds(), { padding: [68, 68], maxZoom: Math.min(demoScanZoomRef.current, LOT_REVIEW_ZOOM), animate: true, duration: .45 });
       });
-      map.on("click", (event) => {
-        const type = demoMarkingToolRef.current;
-        const boundary = demoBoundaryRef.current;
-        if (!type || !boundary || !boundary.getBounds().contains(event.latlng)) return;
-        setDemoMarkings((current) => [...current, { id: crypto.randomUUID(), type, lat: event.latlng.lat, lng: event.latlng.lng, source: "manual" }]);
-      });
       await configureDemoImagery();
     })();
     return () => { active = false; map?.remove(); demoMapRef.current = null; demoLeafletRef.current = null; demoTileLayerRef.current = null; demoBoundaryRef.current = null; };
@@ -196,10 +188,8 @@ function ProductDemo() {
       }).addTo(map);
       marker.on("click", () => {
         setDemoMarkings((current) => current.filter((item) => item.id !== marking.id));
-        if (marking.source === "auto") {
-          const key = marking.type === "stall" ? "stalls" : marking.type === "ada" ? "ada" : marking.type === "arrow" ? "arrows" : "accessAisles";
-          setDetectedCounts((current) => ({ ...current, [key]: Math.max(0, current[key] - 1) }));
-        }
+        const key = marking.type === "stall" ? "stalls" : marking.type === "ada" ? "ada" : marking.type === "arrow" ? "arrows" : "accessAisles";
+        setDetectedCounts((current) => ({ ...current, [key]: Math.max(0, current[key] - 1) }));
       });
       marker.bindTooltip(`Remove ${marking.type === "ada" ? "ADA stall" : marking.type === "access_aisle" ? "ADA path / access aisle" : marking.type}`, { direction: "top" });
       demoMarkingLayersRef.current.set(marking.id, marker);
@@ -252,7 +242,7 @@ function ProductDemo() {
         setScanWarnings(result.warnings);
         setDemoMarkings(result.detections.map((detection, index) => {
           const point = map.containerPointToLatLng([detection.x * width, detection.y * height]);
-          return { id: `auto-${index}-${crypto.randomUUID()}`, type: detection.type, lat: point.lat, lng: point.lng, source: "auto" };
+          return { id: `auto-${index}-${crypto.randomUUID()}`, type: detection.type, lat: point.lat, lng: point.lng };
         }));
         setScanProgress(100);
         await new Promise((resolve) => window.setTimeout(resolve, 350));
@@ -355,7 +345,6 @@ function ProductDemo() {
     setLotArea(0);
     setDemoMarkings([]);
     setDetectedCounts(EMPTY_DEMO_COUNTS);
-    setMarkingTool(null);
     setScanStage(0);
     setScanProgress(0);
     setScanError("");
@@ -385,7 +374,6 @@ function ProductDemo() {
     setLotArea(0);
     setDemoMarkings([]);
     setDetectedCounts(EMPTY_DEMO_COUNTS);
-    setMarkingTool(null);
     setScanStage(0);
     setScanProgress(0);
     setScanError("");
@@ -404,7 +392,6 @@ function ProductDemo() {
   function toggleDemoBoundary() {
     const boundary = demoBoundaryRef.current;
     if (!boundary) return;
-    setMarkingTool(null);
     if (boundaryEditing) {
       boundary.pm.disable();
       boundary.setStyle({ dashArray: "10 7", fillOpacity: .22 });
@@ -420,11 +407,6 @@ function ProductDemo() {
       demoMapRef.current?.scrollWheelZoom.enable();
       demoMapRef.current?.touchZoom.enable();
     }
-  }
-
-  function setMarkingTool(type: DemoMarkingType | null) {
-    demoMarkingToolRef.current = type;
-    setMarkingToolState(type);
   }
 
   function adjustDetectedCount(key: keyof DemoCounts, delta: number) {
@@ -530,7 +512,7 @@ function ProductDemo() {
           </div>
           <div className={`demo-address-found ${selectedSite ? "matched" : ""}`}><span>{selectedSite ? "PROPERTY MATCH" : "LIVE ADDRESS DEMO"}</span><strong>{propertyName}</strong><small>{propertyLocation}</small></div>
         </div>
-          <div className={`lot-canvas demo-stage-block ${phase} ${boundaryEditing || selectingLot ? "editing" : ""} ${markingTool ? "marking" : ""}`}>
+          <div className={`lot-canvas demo-stage-block ${phase} ${boundaryEditing || selectingLot ? "editing" : ""}`}>
             <div ref={demoMapElementRef} className="demo-real-map" aria-label={`Aerial imagery of ${propertyName}`} />
             <div className="demo-step-label demo-map-label"><b>02</b><span>SELECT THE PARKING LOT</span></div>
             {phase === "selecting" && <div className="lot-selection-guide"><strong>DRAW THE LOT BOUNDARY</strong><span>Click each corner around the parking area, then click the first point again to finish.</span></div>}
@@ -538,11 +520,6 @@ function ProductDemo() {
             {(phase === "selecting" || phase === "scanning" || phase === "quote") && <div className="scan-hud"><span><i /> {imageryDetail}</span><strong>{phase === "selecting" ? "MANUAL LOT SELECTION" : phase === "scanning" ? scanStageLabel : scanError ? "SCAN NEEDS MANUAL REVIEW" : "AI COUNT COMPLETE — REVIEW BELOW"}</strong></div>}
             {phase === "quote" && <div className="sample-detection-overlay"><b>{scanError ? "SCAN COULD NOT VERIFY MARKINGS" : `${mockQuote.stalls + mockQuote.ada + mockQuote.accessAisles + mockQuote.arrows} MARKINGS COUNTED${scanConfidence === null ? "" : ` · ${Math.round(scanConfidence * 100)}% CONFIDENCE`}`}</b><small>{scanError || scanWarnings[0] || "Review the totals and correct anything hidden or missed"}</small></div>}
             {phase === "quote" && <>
-              <div className="demo-marking-toolbar" aria-label="Visible marking tools">
-                <span>ADD ANY MISSED MARKING ON THE MAP</span>
-                <div><button className={markingTool === "stall" ? "active" : ""} onClick={() => setMarkingTool("stall")}>＋ STALL</button><button className={markingTool === "ada" ? "active" : ""} onClick={() => setMarkingTool("ada")}>＋ ADA</button><button className={markingTool === "access_aisle" ? "active" : ""} onClick={() => setMarkingTool("access_aisle")}>＋ ADA PATH</button><button className={markingTool === "arrow" ? "active" : ""} onClick={() => setMarkingTool("arrow")}>＋ ARROW</button><button className={!markingTool ? "active done" : "done"} onClick={() => setMarkingTool(null)}>DONE</button></div>
-                <small>Use the controls below to correct totals. Tap a manually placed marker to remove it.</small>
-              </div>
               <button className="edit-demo-boundary" onClick={toggleDemoBoundary}>{boundaryEditing ? "SAVE LOT OUTLINE" : "EDIT LOT OUTLINE"}</button>
               {scanError && <button className="retry-demo-scan" onClick={retryDemoScan}>RETRY AI SCAN</button>}
               <div className="map-summary editable"><div><span>STALLS</span><b><button onClick={() => adjustDetectedCount("stalls", -1)} aria-label="Remove one stall">−</button>{mockQuote.stalls}<button onClick={() => adjustDetectedCount("stalls", 1)} aria-label="Add one stall">＋</button></b></div><div><span>ADA</span><b><button onClick={() => adjustDetectedCount("ada", -1)} aria-label="Remove one ADA stall">−</button>{mockQuote.ada}<button onClick={() => adjustDetectedCount("ada", 1)} aria-label="Add one ADA stall">＋</button></b></div><div><span>ADA PATHS</span><b><button onClick={() => adjustDetectedCount("accessAisles", -1)} aria-label="Remove one ADA path">−</button>{mockQuote.accessAisles}<button onClick={() => adjustDetectedCount("accessAisles", 1)} aria-label="Add one ADA path">＋</button></b></div><div><span>ARROWS</span><b><button onClick={() => adjustDetectedCount("arrows", -1)} aria-label="Remove one arrow">−</button>{mockQuote.arrows}<button onClick={() => adjustDetectedCount("arrows", 1)} aria-label="Add one arrow">＋</button></b></div></div>

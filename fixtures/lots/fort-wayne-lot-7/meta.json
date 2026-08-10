@@ -1,0 +1,44 @@
+{
+  "fixture_id": "fort-wayne-lot-7",
+  "source": "indiana: in2024_04802137_06",
+  "source_url": "https://di-ingov.img.arcgis.com/arcgis/rest/services/DynamicWebMercator/Indiana_Current_Imagery/ImageServer",
+  "license": "Creative Commons Zero (CC0)",
+  "license_verified_at": "2026-08-10",
+  "attribution": "Indiana Geographic Information Office (IGIO)",
+  "capture_date": "2024",
+  "nominal_resolution_m": 0.1523428272659534,
+  "source_gsd_m": 0.15240030480060962,
+  "crs": "EPSG:4326",
+  "bbox": [
+    -85.1145,
+    41.11515,
+    -85.1118,
+    41.11816
+  ],
+  "resolution_tier": "15cm",
+  "lot_profile": [
+    "large_multi_row",
+    "tree_shadow"
+  ],
+  "source_attributes": {
+    "OBJECTID": 224087,
+    "Name": "in2024_04802137_06",
+    "MinPS": 0,
+    "MaxPS": 1.21920243840488,
+    "LowPS": 0.15240030480060962,
+    "HighPS": 0.30480060960121924,
+    "Category": 1,
+    "Tag": "Dataset",
+    "GroupName": "",
+    "ProductName": "",
+    "CenterX": -9474487.167072263,
+    "CenterY": 5029870.17174376,
+    "ZOrder": 4048,
+    "Image_Year": null,
+    "County": null,
+    "Pixel_Size": null,
+    "Shape_Length": 4047.836499281517,
+    "Shape_Area": 1024057.5371870376
+  },
+  "acquisition_status": "verified"
+}

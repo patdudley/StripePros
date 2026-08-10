@@ -1,0 +1,43 @@
+{
+  "fixture_id": "lafayette-large",
+  "source": "indiana: in2023_30171872_06",
+  "source_url": "https://di-ingov.img.arcgis.com/arcgis/rest/services/DynamicWebMercator/Indiana_Current_Imagery/ImageServer",
+  "license": "Creative Commons Zero (CC0)",
+  "license_verified_at": "2026-08-10",
+  "attribution": "Indiana Geographic Information Office (IGIO)",
+  "capture_date": "2023",
+  "nominal_resolution_m": 0.1523781707617459,
+  "source_gsd_m": 0.15240030480060962,
+  "crs": "EPSG:4326",
+  "bbox": [
+    -86.8505,
+    40.38838,
+    -86.8474,
+    40.39022
+  ],
+  "resolution_tier": "15cm",
+  "lot_profile": [
+    "faded_paint"
+  ],
+  "source_attributes": {
+    "OBJECTID": 275973,
+    "Name": "in2023_30171872_06",
+    "MinPS": 0,
+    "MaxPS": 1.21920243840488,
+    "LowPS": 0.15240030480060962,
+    "HighPS": 0.30480060960121924,
+    "Category": 1,
+    "Tag": "Dataset",
+    "GroupName": "",
+    "ProductName": "",
+    "CenterX": -9667695.511983924,
+    "CenterY": 4923136.984968936,
+    "ZOrder": 4046,
+    "Image_Year": "2023",
+    "County": "Tippecanoe",
+    "Pixel_Size": "06 in.",
+    "Shape_Length": 4004.2803817140166,
+    "Shape_Area": 1002137.5205313147
+  },
+  "acquisition_status": "verified"
+}

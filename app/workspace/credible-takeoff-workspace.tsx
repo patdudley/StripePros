@@ -27,7 +27,8 @@ type MapImageryConfig = {
   attribution?: string;
 };
 type SavedEstimate = { id: string; address: string; total: number; measurements: number; updatedAt: string };
-type IntegrationStatus = { jobber: boolean; quickbooks: boolean; hubspot: boolean; webhook: boolean };
+type ProviderIntegrationStatus = { configured: boolean; connected: boolean; mode: string; accountName: string | null; accountId: string | null };
+type IntegrationStatus = { providers: Record<"hubspot" | "jobber" | "quickbooks" | "onecrew" | "stripe", ProviderIntegrationStatus> };
 type LotScanResult = {
   stalls: number;
   ada: number;
@@ -108,22 +109,42 @@ function quoteCategory(id: string): "Striping" | "Job" {
 }
 
 function IntegrationHub({ address, total, itemCount }: { address: string; total: number; itemCount: number }) {
-  const [status, setStatus] = useState<IntegrationStatus>({ jobber: false, quickbooks: false, hubspot: false, webhook: false });
+  const emptyStatus: ProviderIntegrationStatus = { configured: false, connected: false, mode: "setup_required", accountName: null, accountId: null };
+  const [status, setStatus] = useState<IntegrationStatus>({ providers: { hubspot: emptyStatus, jobber: emptyStatus, quickbooks: emptyStatus, onecrew: emptyStatus, stripe: emptyStatus } });
   const [message, setMessage] = useState("");
-  useEffect(() => { void fetch("/api/integrations/status").then((response) => response.json()).then((data: IntegrationStatus) => setStatus(data)).catch(() => undefined); }, []);
-  async function send(provider: "hubspot" | "webhook") {
+  async function refreshStatus() {
+    await fetch("/api/integrations/status").then((response) => response.json()).then((data: IntegrationStatus) => setStatus(data));
+  }
+  useEffect(() => { void refreshStatus().catch(() => undefined); }, []);
+  async function send(provider: "hubspot" | "onecrew") {
     const response = await fetch("/api/integrations/export", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider, address, total, itemCount }) });
     const result = await response.json() as { message?: string; error?: string };
     setMessage(response.ok ? result.message ?? "Estimate exported." : result.error ?? "Export failed.");
   }
+  async function disconnect(provider: "hubspot" | "jobber" | "quickbooks" | "stripe") {
+    const response = await fetch(`/api/integrations/${provider}`, { method: "DELETE" });
+    if (!response.ok) { setMessage("The connection could not be removed."); return; }
+    setMessage(`${provider[0].toUpperCase()}${provider.slice(1)} disconnected.`);
+    await refreshStatus();
+  }
+  function action(provider: "hubspot" | "jobber" | "quickbooks" | "onecrew" | "stripe") {
+    const current = status.providers[provider];
+    if (provider === "hubspot" && current.connected) return <><button onClick={() => void send("hubspot")}>SEND CURRENT ESTIMATE →</button>{current.mode === "oauth" && <button className="integration-disconnect" onClick={() => void disconnect("hubspot")}>DISCONNECT</button>}</>;
+    if (provider === "onecrew" && current.connected) return <button onClick={() => void send("onecrew")}>SEND CURRENT ESTIMATE →</button>;
+    if (provider === "stripe" && current.mode === "billing_ready") return <><i className="ready" />STRIPE BILLING READY<small>Add STRIPE_CONNECT_CLIENT_ID for customer account connections.</small></>;
+    if (current.connected) return <><i className="ready" />{current.accountName || current.accountId || "CONNECTED"}{provider !== "onecrew" && <button className="integration-disconnect" onClick={() => void disconnect(provider as "jobber" | "quickbooks" | "stripe")}>DISCONNECT</button>}</>;
+    if (current.configured) return <a href={`/api/integrations/${provider}/connect`}>CONNECT {provider === "quickbooks" ? "QUICKBOOKS" : provider.toUpperCase()} →</a>;
+    return <><i />SETUP REQUIRED<small>{provider === "onecrew" ? "Add the OneCrew Lead Intake API key." : `Add ${provider === "quickbooks" ? "Intuit" : provider} app credentials and the integration token key.`}</small></>;
+  }
   return <section className="workspace-list-view integration-view">
-    <header><div><p>CONNECTED WORKFLOW</p><h1>Integrations</h1></div><span className="integration-research-badge">FIELD-SERVICE READY</span></header>
-    <div className="integration-intro"><strong>Quote here. Run the job where your team already works.</strong><p>Approved work can be handed to field-service, accounting, CRM, or webhook systems.</p></div>
+    <header><div><p>CONNECTED WORKFLOW</p><h1>Integrations</h1></div><span className="integration-research-badge">SECURE ACCOUNT CONNECTIONS</span></header>
+    <div className="integration-intro"><strong>Plays well with your stack.</strong><p>Customers, estimates, invoices, and payments flow both ways — no double-entry, no CSV shuffling.</p></div>
     <div className="integration-grid">
-      <article className="integration-card recommended"><div className="integration-rank">01</div><div className="integration-logo jobber-logo">J</div><div className="integration-card-copy"><span>FIELD SERVICE</span><h2>Jobber</h2><p>Customer, quote, job, scheduling, crew and invoice handoff.</p></div><div className="integration-action"><i className={status.jobber ? "ready" : ""} />{status.jobber ? "APP CREDENTIALS READY" : "OAUTH APP REQUIRED"}</div></article>
-      <article className="integration-card"><div className="integration-rank">02</div><div className="integration-logo qb-logo">qb</div><div className="integration-card-copy"><span>ACCOUNTING</span><h2>QuickBooks Online</h2><p>Approved customers, service items, invoices and payments.</p></div><div className="integration-action"><i className={status.quickbooks ? "ready" : ""} />{status.quickbooks ? "APP CREDENTIALS READY" : "INTUIT APP REQUIRED"}</div></article>
-      <article className="integration-card"><div className="integration-rank">03</div><div className="integration-logo hubspot-logo">H</div><div className="integration-card-copy"><span>SALES CRM</span><h2>HubSpot</h2><p>Create a deal from the current estimate.</p></div><div className="integration-action">{status.hubspot ? <button onClick={() => void send("hubspot")}>SEND DEAL →</button> : "PRIVATE APP TOKEN NEEDED"}</div></article>
-      <article className="integration-card"><div className="integration-rank">04</div><div className="integration-logo webhook-logo">↗</div><div className="integration-card-copy"><span>AUTOMATION</span><h2>Zapier / Make</h2><p>Send an estimate-ready webhook event.</p></div><div className="integration-action">{status.webhook ? <button onClick={() => void send("webhook")}>SEND TEST →</button> : "WEBHOOK URL NEEDED"}</div></article>
+      <article className="integration-card recommended"><div className="integration-rank">01</div><div className="integration-logo hubspot-logo">H</div><div className="integration-card-copy"><span>CRM &amp; DEALS</span><h2>HubSpot</h2><p>Connect contacts and deals, then send the current estimate into your sales pipeline.</p></div><div className="integration-action">{action("hubspot")}</div></article>
+      <article className="integration-card"><div className="integration-rank">02</div><div className="integration-logo jobber-logo">J</div><div className="integration-card-copy"><span>JOBS &amp; CLIENTS</span><h2>Jobber</h2><p>Secure OAuth is ready for client, quote, job, schedule, and invoice mappings.</p></div><div className="integration-action">{action("jobber")}</div></article>
+      <article className="integration-card"><div className="integration-rank">03</div><div className="integration-logo qb-logo">qb</div><div className="integration-card-copy"><span>ACCOUNTING</span><h2>QuickBooks</h2><p>Connect a QuickBooks company for customer, invoice, and payment synchronization.</p></div><div className="integration-action">{action("quickbooks")}</div></article>
+      <article className="integration-card"><div className="integration-rank">04</div><div className="integration-logo onecrew-logo">1C</div><div className="integration-card-copy"><span>OPERATIONS</span><h2>OneCrew</h2><p>Send an approved estimate into OneCrew as a lead with its site and project details.</p></div><div className="integration-action">{action("onecrew")}</div></article>
+      <article className="integration-card"><div className="integration-rank">05</div><div className="integration-logo stripe-logo">S</div><div className="integration-card-copy"><span>PAYMENTS</span><h2>Stripe</h2><p>Billing is isolated from connected contractor payment accounts and their payouts.</p></div><div className="integration-action">{action("stripe")}</div></article>
     </div>{message && <p className="integration-message">{message}</p>}
   </section>;
 }
@@ -213,7 +234,8 @@ export function CredibleTakeoffWorkspace() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      if (new URLSearchParams(window.location.search).get("view") === "schedule") setView("schedule");
+      const requestedView = new URLSearchParams(window.location.search).get("view");
+      if (requestedView === "schedule" || requestedView === "integrations") setView(requestedView);
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);

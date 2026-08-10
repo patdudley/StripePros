@@ -712,7 +712,6 @@ export function CredibleTakeoffWorkspace() {
         <div className="takeoff-message"><strong>{message}</strong></div>
       </div>
       <aside className="estimate-panel annotation-panel workspace-quote-panel">
-        <div className="workspace-quote-step"><b>03</b><span>GENERATE THE QUOTE</span></div>
         <div className="quote-top"><span><BrandMark /> STRIPE PROS</span><b>EDITABLE DRAFT</b></div>
         <div className="quote-site"><small>PREPARED FOR</small><strong>{siteAddress || "Select a property"}</strong><span>{selectedSite?.label ?? ""}</span></div>
         <div className="quote-lines workspace-home-quote-lines">

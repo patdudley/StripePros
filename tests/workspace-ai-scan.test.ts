@@ -20,6 +20,6 @@ describe("live workspace AI scan", () => {
     expect(workspaceSource).toContain("Review every marker before verifying");
     expect(workspaceSource).not.toContain("STALL ROW ASSIST");
     expect(workspaceSource).not.toContain("AI SCAN READY");
-    expect(workspaceSource).toContain("GENERATE THE QUOTE");
+    expect(workspaceSource).not.toContain("GENERATE THE QUOTE");
   });
 });

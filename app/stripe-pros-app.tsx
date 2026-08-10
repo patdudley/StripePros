@@ -25,15 +25,15 @@ type DemoBoundary = LeafletPolygon & {
 };
 type DemoGeomanMap = LeafletMap & { pm: { enableDraw(shape: "Polygon", options?: Record<string, unknown>): void; disableDraw(): void } };
 type DemoMarkingType = "stall" | "ada" | "arrow";
-type DemoMarking = { id: string; type: DemoMarkingType; lat: number; lng: number };
+type DemoMarking = { id: string; type: DemoMarkingType; lat: number; lng: number; source: "auto" | "manual" };
 type DemoCounts = { stalls: number; ada: number; arrows: number };
 const EMPTY_DEMO_COUNTS: DemoCounts = { stalls: 0, ada: 0, arrows: 0 };
-
-function verifiedDemoCounts(site: GeocodeResult | null): DemoCounts | null {
-  const label = site?.label.toLowerCase() ?? "";
-  if (label.includes("3008") && label.includes("el cajon")) return { stalls: 30, ada: 2, arrows: 7 };
-  return null;
-}
+type LotScanResult = DemoCounts & {
+  confidence: number;
+  summary: string;
+  warnings: string[];
+  detections: Array<{ type: DemoMarkingType; x: number; y: number; confidence: number }>;
+};
 type PriceItem = {
   id: string;
   name: string;
@@ -126,6 +126,9 @@ function ProductDemo() {
   const [detectedCounts, setDetectedCounts] = useState<DemoCounts>(EMPTY_DEMO_COUNTS);
   const [markingTool, setMarkingToolState] = useState<DemoMarkingType | null>(null);
   const [scanStage, setScanStage] = useState(0);
+  const [scanError, setScanError] = useState("");
+  const [scanConfidence, setScanConfidence] = useState<number | null>(null);
+  const [scanWarnings, setScanWarnings] = useState<string[]>([]);
   const suppressSuggestionsRef = useRef(false);
 
   useEffect(() => {
@@ -164,7 +167,7 @@ function ProductDemo() {
         const type = demoMarkingToolRef.current;
         const boundary = demoBoundaryRef.current;
         if (!type || !boundary || !boundary.getBounds().contains(event.latlng)) return;
-        setDemoMarkings((current) => [...current, { id: crypto.randomUUID(), type, lat: event.latlng.lat, lng: event.latlng.lng }]);
+        setDemoMarkings((current) => [...current, { id: crypto.randomUUID(), type, lat: event.latlng.lat, lng: event.latlng.lng, source: "manual" }]);
       });
       await configureDemoImagery();
     })();
@@ -183,32 +186,68 @@ function ProductDemo() {
         bubblingMouseEvents: false,
         icon: L.divIcon({ className: `demo-count-marker demo-count-${marking.type}`, html: label, iconSize: [30, 24], iconAnchor: [15, 12] }),
       }).addTo(map);
-      marker.on("click", () => setDemoMarkings((current) => current.filter((item) => item.id !== marking.id)));
+      marker.on("click", () => {
+        setDemoMarkings((current) => current.filter((item) => item.id !== marking.id));
+        if (marking.source === "auto") {
+          const key = marking.type === "stall" ? "stalls" : marking.type === "ada" ? "ada" : "arrows";
+          setDetectedCounts((current) => ({ ...current, [key]: Math.max(0, current[key] - 1) }));
+        }
+      });
       marker.bindTooltip(`Remove ${marking.type === "ada" ? "ADA stall" : marking.type}`, { direction: "top" });
       demoMarkingLayersRef.current.set(marking.id, marker);
     }
   }, [demoMarkings]);
 
   useEffect(() => {
-    if (phase !== "scanning") return;
-    const verified = verifiedDemoCounts(selectedSite);
-    const tracing = window.setTimeout(() => {
-      setScanStage(1);
-      if (verified) setDetectedCounts({ stalls: 10, ada: 0, arrows: 0 });
-    }, 450);
-    const markings = window.setTimeout(() => {
-      setScanStage(2);
-      if (verified) setDetectedCounts({ stalls: 22, ada: 1, arrows: 3 });
-    }, 1200);
-    const pricing = window.setTimeout(() => {
-      setScanStage(3);
-      if (verified) setDetectedCounts(verified);
-    }, 1900);
-    const complete = window.setTimeout(() => {
-      if (verified) setDetectedCounts(verified);
-      setPhase("quote");
-    }, 2700);
-    return () => [tracing, markings, pricing, complete].forEach(window.clearTimeout);
+    if (phase !== "scanning" || !selectedSite) return;
+    const controller = new AbortController();
+    const stageTimers = [450, 1200, 1900].map((delay, index) => window.setTimeout(() => setScanStage(index + 1), delay));
+
+    void (async () => {
+      try {
+        setScanError("");
+        setScanConfidence(null);
+        setScanWarnings([]);
+        await new Promise((resolve) => window.setTimeout(resolve, 900));
+        if (controller.signal.aborted || !demoMapElementRef.current || !demoMapRef.current) return;
+        const { toJpeg } = await import("html-to-image");
+        const image = await toJpeg(demoMapElementRef.current, {
+          cacheBust: true,
+          pixelRatio: 2,
+          quality: .94,
+          backgroundColor: "#11110f",
+        });
+        const result = await api<LotScanResult>("/api/scan-lot", {
+          method: "POST",
+          signal: controller.signal,
+          body: JSON.stringify({ address: selectedSite.label, image }),
+        });
+        if (controller.signal.aborted || !demoMapRef.current || !demoMapElementRef.current) return;
+
+        setDetectedCounts({ stalls: result.stalls, ada: result.ada, arrows: result.arrows });
+        setScanConfidence(result.confidence);
+        setScanWarnings(result.warnings);
+        const map = demoMapRef.current;
+        const width = demoMapElementRef.current.clientWidth;
+        const height = demoMapElementRef.current.clientHeight;
+        setDemoMarkings(result.detections.map((detection, index) => {
+          const point = map.containerPointToLatLng([detection.x * width, detection.y * height]);
+          return { id: `auto-${index}-${crypto.randomUUID()}`, type: detection.type, lat: point.lat, lng: point.lng, source: "auto" };
+        }));
+      } catch (caught) {
+        if (controller.signal.aborted) return;
+        setDetectedCounts(EMPTY_DEMO_COUNTS);
+        setDemoMarkings([]);
+        setScanError(caught instanceof Error ? caught.message : "The lot scan could not be completed.");
+      } finally {
+        if (!controller.signal.aborted) setPhase("quote");
+      }
+    })();
+
+    return () => {
+      controller.abort();
+      stageTimers.forEach(window.clearTimeout);
+    };
   }, [phase, selectedSite]);
 
   async function configureDemoImagery(site?: GeocodeResult) {
@@ -295,6 +334,9 @@ function ProductDemo() {
     setDetectedCounts(EMPTY_DEMO_COUNTS);
     setMarkingTool(null);
     setScanStage(0);
+    setScanError("");
+    setScanConfidence(null);
+    setScanWarnings([]);
     if (demoBoundaryRef.current) demoMapRef.current?.removeLayer(demoBoundaryRef.current);
     demoBoundaryRef.current = null;
     (demoMapRef.current as DemoGeomanMap | null)?.pm.disableDraw();
@@ -321,6 +363,9 @@ function ProductDemo() {
     setDetectedCounts(EMPTY_DEMO_COUNTS);
     setMarkingTool(null);
     setScanStage(0);
+    setScanError("");
+    setScanConfidence(null);
+    setScanWarnings([]);
     setSuggesting(false);
     setSelectingLot(true);
     setPhase("selecting");
@@ -401,9 +446,9 @@ function ProductDemo() {
   }
 
   const mockQuote = useMemo(() => {
-    const stalls = detectedCounts.stalls + demoMarkings.filter((marking) => marking.type === "stall").length;
-    const ada = detectedCounts.ada + demoMarkings.filter((marking) => marking.type === "ada").length;
-    const arrows = detectedCounts.arrows + demoMarkings.filter((marking) => marking.type === "arrow").length;
+    const stalls = detectedCounts.stalls + demoMarkings.filter((marking) => marking.source === "manual" && marking.type === "stall").length;
+    const ada = detectedCounts.ada + demoMarkings.filter((marking) => marking.source === "manual" && marking.type === "ada").length;
+    const arrows = detectedCounts.arrows + demoMarkings.filter((marking) => marking.source === "manual" && marking.type === "arrow").length;
     return { stalls, ada, arrows, lotArea, total: stalls * 5 + ada * 35 + arrows * 15 };
   }, [demoMarkings, detectedCounts, lotArea]);
 
@@ -450,8 +495,8 @@ function ProductDemo() {
             <div className="demo-step-label demo-map-label"><b>02</b><span>SELECT THE PARKING LOT</span></div>
             {phase === "selecting" && <div className="lot-selection-guide"><strong>DRAW THE LOT BOUNDARY</strong><span>Click each corner around the parking area, then click the first point again to finish.</span></div>}
             {phase === "scanning" && <div className="scan-line"><span>{scanStageLabel}</span></div>}
-            {(phase === "selecting" || phase === "scanning" || phase === "quote") && <div className="scan-hud"><span><i /> {imageryDetail}</span><strong>{phase === "selecting" ? "MANUAL LOT SELECTION" : phase === "scanning" ? scanStageLabel : "AUTO COUNT COMPLETE — REVIEW BELOW"}</strong></div>}
-            {phase === "quote" && <div className="sample-detection-overlay"><b>{mockQuote.stalls + mockQuote.ada + mockQuote.arrows} MARKINGS COUNTED</b><small>Review the totals and correct anything hidden or missed</small></div>}
+            {(phase === "selecting" || phase === "scanning" || phase === "quote") && <div className="scan-hud"><span><i /> {imageryDetail}</span><strong>{phase === "selecting" ? "MANUAL LOT SELECTION" : phase === "scanning" ? scanStageLabel : scanError ? "SCAN NEEDS MANUAL REVIEW" : "AI COUNT COMPLETE — REVIEW BELOW"}</strong></div>}
+            {phase === "quote" && <div className="sample-detection-overlay"><b>{scanError ? "SCAN COULD NOT VERIFY MARKINGS" : `${mockQuote.stalls + mockQuote.ada + mockQuote.arrows} MARKINGS COUNTED${scanConfidence === null ? "" : ` · ${Math.round(scanConfidence * 100)}% CONFIDENCE`}`}</b><small>{scanError || scanWarnings[0] || "Review the totals and correct anything hidden or missed"}</small></div>}
             {phase === "quote" && <>
               <div className="demo-marking-toolbar" aria-label="Visible marking tools">
                 <span>ADD ANY MISSED MARKING ON THE MAP</span>
@@ -472,7 +517,7 @@ function ProductDemo() {
               <div><span>Directional arrows <small>{mockQuote.arrows} × $15.00</small></span><b>${(mockQuote.arrows * 15).toFixed(2)}</b></div>
             </div>
             <div className="quote-total"><span>DRAFT TOTAL</span><strong>${mockQuote.total.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
-            <div className="quote-ready"><span>✓</span><div><b>SCAN COMPLETE — VERIFY BEFORE SENDING</b><small>Automatic counts can be corrected for trees, shadows, or faded markings</small></div></div>
+            <div className="quote-ready"><span>{scanError ? "!" : "✓"}</span><div><b>{scanError ? "MANUAL COUNT REQUIRED" : "AI SCAN COMPLETE — VERIFY BEFORE SENDING"}</b><small>{scanError || scanWarnings[0] || "Automatic counts can be corrected for trees, shadows, or faded markings"}</small></div></div>
           </div>
         </div>
       </div>

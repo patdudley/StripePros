@@ -10,10 +10,11 @@ describe("homepage lot counting", () => {
     expect(homepageSource).not.toContain("setDraftCounts");
   });
 
-  it("uses a verified address-specific scan instead of an area estimate", () => {
-    expect(homepageSource).toContain('label.includes("3008")');
-    expect(homepageSource).toContain("{ stalls: 30, ada: 2, arrows: 7 }");
-    expect(homepageSource).toContain("setDetectedCounts(verified)");
+  it("uses the vision scan endpoint for every selected address", () => {
+    expect(homepageSource).not.toContain("verifiedDemoCounts");
+    expect(homepageSource).not.toContain('label.includes("3008")');
+    expect(homepageSource).toContain('api<LotScanResult>("/api/scan-lot"');
+    expect(homepageSource).toContain("setDetectedCounts({ stalls: result.stalls, ada: result.ada, arrows: result.arrows })");
   });
 
   it("keeps every detected category manually correctable", () => {

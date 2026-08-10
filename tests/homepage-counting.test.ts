@@ -14,7 +14,7 @@ describe("homepage lot counting", () => {
     expect(homepageSource).not.toContain("verifiedDemoCounts");
     expect(homepageSource).not.toContain('label.includes("3008")');
     expect(homepageSource).toContain('api<LotScanResult>("/api/scan-lot"');
-    expect(homepageSource).toContain("setDetectedCounts({ stalls: result.stalls, ada: result.ada, arrows: result.arrows })");
+    expect(homepageSource).toContain("setDetectedCounts({ stalls: result.stalls, ada: result.ada, arrows: result.arrows, accessAisles: result.accessAisles })");
   });
 
   it("keeps every detected category manually correctable", () => {

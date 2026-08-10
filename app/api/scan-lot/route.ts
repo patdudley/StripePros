@@ -1,6 +1,6 @@
 import { json } from "@/lib/api";
 
-type DetectionType = "stall" | "ada" | "arrow";
+type DetectionType = "stall" | "ada" | "arrow" | "access_aisle";
 type ScanDetection = { type: DetectionType; x: number; y: number; confidence: number };
 type ScanPayload = {
   confidence?: unknown;
@@ -30,7 +30,7 @@ function extractOutputText(payload: unknown) {
 function normalizeDetection(value: unknown): ScanDetection | null {
   if (!value || typeof value !== "object") return null;
   const detection = value as Record<string, unknown>;
-  if (detection.type !== "stall" && detection.type !== "ada" && detection.type !== "arrow") return null;
+  if (detection.type !== "stall" && detection.type !== "ada" && detection.type !== "arrow" && detection.type !== "access_aisle") return null;
   const x = Number(detection.x);
   const y = Number(detection.y);
   const confidence = Number(detection.confidence);
@@ -73,7 +73,7 @@ export async function POST(request: Request) {
           additionalProperties: false,
           required: ["type", "x", "y", "confidence"],
           properties: {
-            type: { type: "string", enum: ["stall", "ada", "arrow"] },
+            type: { type: "string", enum: ["stall", "ada", "arrow", "access_aisle"] },
             x: { type: "number", minimum: 0, maximum: 1 },
             y: { type: "number", minimum: 0, maximum: 1 },
             confidence: { type: "number", minimum: 0, maximum: 1 },
@@ -104,7 +104,7 @@ export async function POST(request: Request) {
               type: "input_text",
               text: `Act as a conservative parking-lot striping takeoff reviewer. The property is ${address}. Analyze only pavement inside the yellow dashed polygon in this aerial screenshot.
 
-Work row by row, clockwise from the top-left of the selected pavement. Return one detection for every visible painted marking and put its center at normalized image coordinates x/y from 0 to 1. A standard stall is one non-ADA parking space defined by its visible separator/end lines, whether occupied or empty. An ADA stall is counted separately and must not also be counted as a standard stall. Count painted directional traffic arrows only when the arrow shape is visible. Do not count vehicles, curbs, crosswalk bars, parking-lot islands, lane lines, the yellow selection outline, buildings, UI controls, or inferred spaces hidden by trees/shadows/roofs.
+Work row by row, clockwise from the top-left of the selected pavement. Return one detection for every visible painted marking and put its center at normalized image coordinates x/y from 0 to 1. A standard stall is one non-ADA parking space defined by its visible separator/end lines, whether occupied or empty. An ADA stall is counted separately and must not also be counted as a standard stall. Count painted directional traffic arrows only when the arrow shape is visible. Return access_aisle for each clearly visible ADA access aisle or striped accessible path beside an ADA stall, placing the marker in the center of its diagonal hatching. Do not assume an access aisle merely because an ADA stall exists. Do not count vehicles, curbs, ordinary crosswalk bars, parking-lot islands, lane lines, the yellow selection outline, buildings, UI controls, or inferred spaces hidden by trees/shadows/roofs.
 
 Every count shown to the user will be derived from your detection list, so include exactly one localized detection per marking. If a marking is blocked or ambiguous, omit it and describe the blocked zone in warnings instead of guessing. Keep the summary short and state what was visibly counted.`,
             },
@@ -129,6 +129,7 @@ Every count shown to the user will be derived from your detection list, so inclu
     const stalls = detections.filter((item) => item.type === "stall").length;
     const ada = detections.filter((item) => item.type === "ada").length;
     const arrows = detections.filter((item) => item.type === "arrow").length;
+    const accessAisles = detections.filter((item) => item.type === "access_aisle").length;
     const confidence = Number(parsed.confidence);
     const warnings = Array.isArray(parsed.warnings) ? parsed.warnings.filter((item): item is string => typeof item === "string").map((item) => item.slice(0, 220)).slice(0, 8) : [];
 
@@ -136,6 +137,7 @@ Every count shown to the user will be derived from your detection list, so inclu
       stalls,
       ada,
       arrows,
+      accessAisles,
       confidence: Number.isFinite(confidence) ? Math.max(0, Math.min(1, confidence)) : 0,
       summary: typeof parsed.summary === "string" ? parsed.summary.slice(0, 300) : "Visible markings analyzed.",
       warnings,

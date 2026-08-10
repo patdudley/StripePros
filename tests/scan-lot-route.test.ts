@@ -19,6 +19,11 @@ describe("AI lot scan route", () => {
     expect(routeSource).toContain("omit it and describe the blocked zone");
   });
 
+  it("localizes visible ADA access aisles without inferring one from an ADA stall", () => {
+    expect(routeSource).toContain('item.type === "access_aisle"');
+    expect(routeSource).toContain("Do not assume an access aisle merely because an ADA stall exists");
+  });
+
   it("allows enough time for a dense original-resolution count", () => {
     expect(routeSource).toContain("105_000");
     expect(routeSource).toContain('reasoning: { effort: "medium" }');

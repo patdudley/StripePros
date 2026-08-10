@@ -31,10 +31,11 @@ type LotScanResult = {
   stalls: number;
   ada: number;
   arrows: number;
+  accessAisles: number;
   confidence: number;
   summary: string;
   warnings: string[];
-  detections: Array<{ type: "stall" | "ada" | "arrow"; x: number; y: number; confidence: number }>;
+  detections: Array<{ type: "stall" | "ada" | "arrow" | "access_aisle"; x: number; y: number; confidence: number }>;
 };
 type DrawShape = "Polygon" | "Line" | "Marker";
 type DrawIntent = "boundary" | "exclusion" | "row" | AnnotationType | null;
@@ -501,7 +502,7 @@ export function CredibleTakeoffWorkspace() {
     setScanError("");
     setScanWarnings([]);
     setCountsVerified(false);
-    setMessage("AI scan running: locating visible stalls, ADA spaces, and directional arrows…");
+    setMessage("AI scan running: locating visible stalls, ADA spaces, access aisles, and directional arrows…");
     try {
       const boundaryPoints = selectedBoundary.coordinates[0].map(([lng, lat]) => [lat, lng] as [number, number]);
       map.fitBounds(boundaryPoints, { padding: [42, 42], maxZoom: imageryInfo.maxZoom, animate: false });
@@ -527,7 +528,7 @@ export function CredibleTakeoffWorkspace() {
       const height = mapElement.clientHeight;
       const modelAnnotations: TakeoffAnnotation[] = result.detections.map((detection, index) => {
         const point = map.containerPointToLatLng([detection.x * width, detection.y * height]);
-        const type: AnnotationType = detection.type === "stall" ? "standard_stall" : detection.type === "ada" ? "ada_stall" : "directional_arrow";
+        const type: AnnotationType = detection.type === "stall" ? "standard_stall" : detection.type === "ada" ? "ada_stall" : detection.type === "access_aisle" ? "ada_access_aisle" : "directional_arrow";
         return {
           id: `model-${crypto.randomUUID()}-${index}`,
           type,
@@ -542,7 +543,7 @@ export function CredibleTakeoffWorkspace() {
       replaceAnnotations([...manualAnnotations, ...modelAnnotations]);
       setScanConfidence(result.confidence);
       setScanWarnings(result.warnings);
-      setMessage(`${modelAnnotations.length} visible markings counted: ${result.stalls} standard stalls, ${result.ada} ADA, ${result.arrows} arrows. Review every marker before verifying.`);
+      setMessage(`${modelAnnotations.length} visible markings counted: ${result.stalls} standard stalls, ${result.ada} ADA, ${result.accessAisles} ADA paths / access aisles, ${result.arrows} arrows. Review every marker before verifying.`);
     } catch (error) {
       const detail = error instanceof Error ? error.message : "The AI scan could not be completed.";
       setScanError(detail);

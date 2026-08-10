@@ -14,7 +14,7 @@ describe("homepage lot counting", () => {
     expect(homepageSource).not.toContain("verifiedDemoCounts");
     expect(homepageSource).not.toContain('label.includes("3008")');
     expect(homepageSource).toContain('api<LotScanResult>("/api/scan-lot"');
-    expect(homepageSource).toContain("setDetectedCounts({ stalls: result.stalls, ada: result.ada, arrows: result.arrows, accessAisles: result.accessAisles })");
+    expect(homepageSource).toContain("setDetectedCounts({ stalls: result.stalls, ada: result.ada, arrows: result.arrows, accessAisles: result.accessAisles, speedBumps: result.speedBumps })");
   });
 
   it("keeps every detected category manually correctable", () => {
@@ -24,6 +24,7 @@ describe("homepage lot counting", () => {
     expect(homepageSource).toContain('adjustDetectedCount("stalls", -1)');
     expect(homepageSource).toContain('adjustDetectedCount("ada", -1)');
     expect(homepageSource).toContain('adjustDetectedCount("arrows", -1)');
+    expect(homepageSource).toContain('adjustDetectedCount("speedBumps", -1)');
   });
 
   it("offers a real retry when the model times out", () => {

@@ -3,6 +3,7 @@ export const ANNOTATION_TYPES = [
   "ada_stall",
   "ada_access_aisle",
   "directional_arrow",
+  "speed_bump",
   "crosswalk",
   "stop_bar",
   "wheel_stop",

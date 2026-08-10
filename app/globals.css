@@ -193,6 +193,7 @@ button { cursor: pointer; }
 .demo-count-access_aisle { width: 38px !important; border-color: #d8eeff; background: repeating-linear-gradient(135deg, #2f8cff 0 5px, #d8eeff 5px 8px); color: #071b35; font-size: 6px; }
 .demo-count-ada { background: #2f8cff; color: white; }
 .demo-count-arrow { border-radius: 50%; background: #62d77c; font-size: 14px; }
+.demo-count-speed_bump { width: 42px !important; background: #ff7a45; color: #11110f; font-size: 6px; }
 .quote-preview { background: #fbfaf6; padding: 24px 21px; opacity: .48; filter: grayscale(1); transition: opacity .5s ease, filter .5s ease, transform .5s ease; transform: translateX(5px); }
 .quote-preview.revealed { opacity: 1; filter: none; transform: translateX(0); }
 .quote-top { display: flex; justify-content: space-between; align-items: center; padding-bottom: 19px; border-bottom: 2px solid var(--ink); }
@@ -653,6 +654,7 @@ button { cursor: pointer; }
 .type-ada_stall { background: #2f8cff; color: white; }
 .type-ada_access_aisle { background: repeating-linear-gradient(135deg, #2f8cff 0 5px, #d8eeff 5px 8px); color: #071b35; }
 .type-directional_arrow { background: #74e08b; }
+.type-speed_bump { background: #ff7a45; }
 .type-crosswalk { background: white; }
 .type-stop_bar, .type-painted_curb { background: #ff6b4a; color: white; }
 .type-wheel_stop { background: #d58cff; }

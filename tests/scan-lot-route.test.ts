@@ -25,6 +25,11 @@ describe("AI lot scan route", () => {
     expect(routeSource).toContain("Count access_aisle only for clearly visible ADA hatching");
   });
 
+  it("detects speed bumps as localized scope instead of inferring them", () => {
+    expect(routeSource).toContain('item.type === "speed_bump"');
+    expect(routeSource).toContain("do not confuse stop bars, crosswalks, shadows, or pavement seams with speed bumps");
+  });
+
   it("uses overlapping clean-image sections and rejects obstructed zero results", () => {
     expect(routeSource).toContain("sections.length < 2");
     expect(routeSource).toContain("overlapping high-resolution aerial sections");

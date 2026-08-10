@@ -18,7 +18,7 @@ export const takeoffSaveSchema = z.object({
   })).max(500),
   annotations: z.array(z.object({
     id: z.string(),
-    type: z.enum(["standard_stall", "ada_stall", "ada_access_aisle", "directional_arrow", "crosswalk", "stop_bar", "wheel_stop", "painted_text", "painted_curb"]),
+    type: z.enum(["standard_stall", "ada_stall", "ada_access_aisle", "directional_arrow", "speed_bump", "crosswalk", "stop_bar", "wheel_stop", "painted_text", "painted_curb"]),
     label: z.string().min(1).max(200),
     geometry,
     provenance: z.enum(["manual", "model", "fixture"]),

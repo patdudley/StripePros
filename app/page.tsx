@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { StripeProsApp } from "./stripe-pros-app";
+import { isAiScanningEnabled } from "@/lib/ai-scanning";
 
 export const metadata: Metadata = {
   title: "Stripe Pros — Faster parking lot quotes",
@@ -7,5 +8,5 @@ export const metadata: Metadata = {
 };
 
 export default function Home() {
-  return <StripeProsApp />;
+  return <StripeProsApp aiScanningEnabled={isAiScanningEnabled()} />;
 }

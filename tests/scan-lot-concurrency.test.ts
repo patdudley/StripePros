@@ -17,10 +17,12 @@ describe("production lot-scan scheduling", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     delete process.env.OPENAI_API_KEY;
+    delete process.env.AI_SCANNING_ENABLED;
   });
 
   it("processes four focused sections in one parallel wave followed by one reconciliation call", async () => {
     process.env.OPENAI_API_KEY = "test-key";
+    process.env.AI_SCANNING_ENABLED = "true";
     let active = 0;
     let peakActive = 0;
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {

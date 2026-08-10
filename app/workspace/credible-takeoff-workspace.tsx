@@ -161,7 +161,7 @@ function IntegrationHub({ address, total, itemCount }: { address: string; total:
   </section>;
 }
 
-export function CredibleTakeoffWorkspace() {
+export function CredibleTakeoffWorkspace({ aiScanningEnabled }: { aiScanningEnabled: boolean }) {
   const mapElementRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const leafletRef = useRef<typeof import("leaflet") | null>(null);
@@ -335,8 +335,12 @@ export function CredibleTakeoffWorkspace() {
       setScanConfidence(null);
       setScanWarnings([]);
       setScanError("");
-      setMessage("Lot selected. Preparing the aerial image for AI counting…");
-      window.setTimeout(() => void runAiScan(geometry), 450);
+      if (aiScanningEnabled) {
+        setMessage("Lot selected. Preparing the aerial image for AI counting…");
+        window.setTimeout(() => void runAiScan(geometry), 450);
+      } else {
+        setMessage("Lot selected. Automated detection is paused pending licensed imagery; use the manual annotation tools to complete the takeoff.");
+      }
       return;
     }
     if (intent === "exclusion" && geometry.type === "Polygon") {
@@ -560,6 +564,10 @@ export function CredibleTakeoffWorkspace() {
   }
 
   async function runAiScan(selectedBoundary = boundary) {
+    if (!aiScanningEnabled) {
+      setMessage("Automated detection is paused pending an imagery license. Manual takeoff remains available.");
+      return;
+    }
     const map = mapRef.current;
     const mapElement = mapElementRef.current;
     if (!selectedBoundary || !map || !mapElement) {
@@ -712,7 +720,7 @@ export function CredibleTakeoffWorkspace() {
     <header className="quote-app-header">
       <Link className="quote-brand" href="/"><BrandMark /><span>STRIPE PROS</span></Link>
       <div className="quote-header-site"><span>TAKEOFF</span><strong>{siteAddress}</strong><small>{boundary ? `${number.format(pavementArea)} SQ FT PAVEMENT · ${acceptedAnnotations.length} ACCEPTED` : "ADDRESS → BOUNDARY → ANNOTATIONS → QUOTE"}</small></div>
-      <div className="quote-header-actions"><span className="autosave-status"><i /> {scanning ? "AI SCANNING" : "AI + MANUAL TAKEOFF"}</span><button onClick={() => void saveEstimate()}>SAVE DRAFT</button><button className="export-button" onClick={() => void exportProposal()} disabled={exporting || !canExport}>{exporting ? "GENERATING…" : "EXPORT PROPOSAL"} <b>→</b></button></div>
+      <div className="quote-header-actions"><span className="autosave-status"><i /> {scanning ? "AI SCANNING" : aiScanningEnabled ? "AI + MANUAL TAKEOFF" : "MANUAL TAKEOFF"}</span><button onClick={() => void saveEstimate()}>SAVE DRAFT</button><button className="export-button" onClick={() => void exportProposal()} disabled={exporting || !canExport}>{exporting ? "GENERATING…" : "EXPORT PROPOSAL"} <b>→</b></button></div>
     </header>
     <aside className="quote-sidebar">
       <p>WORKSPACE</p>
@@ -743,6 +751,7 @@ export function CredibleTakeoffWorkspace() {
       </div>
       <div className={`map-stage ${scanning ? "scanning" : ""}`}>
         <div ref={mapElementRef} className={MAP_CLASS_NAME} data-drawing={Boolean(drawingIntent)} />
+        {!aiScanningEnabled && <div className="workspace-scanning-suspended" role="status"><strong>AUTOMATED DETECTION PAUSED</strong><span>Pending imagery licensing. Draw the lot and use the manual annotation tools.</span></div>}
         <div className="map-workflow-strip"><button className={!boundary ? "primary" : ""} onClick={() => startDraw("boundary")}>{boundary ? "REDRAW LOT" : "1 · DRAW LOT"}</button><button disabled={!boundary} onClick={() => startDraw("exclusion")}>＋ EXCLUSION</button><button disabled={!boundary} onClick={() => setBoundaryEditing((value) => !value)}>{boundaryEditing ? "SAVE BOUNDARY" : "EDIT BOUNDARY"}</button></div>
         {Boolean(exclusions.length) && <div className="exclusion-list"><strong>EXCLUSIONS</strong>{exclusions.map((exclusion) => <div key={exclusion.id}><button className={selectedExclusionId === exclusion.id ? "selected" : ""} onClick={() => setSelectedExclusionId(exclusion.id)}>{exclusion.type.replaceAll("_", " ")}</button><button aria-label={`Delete ${exclusion.type} exclusion`} onClick={() => { setExclusions((current) => current.filter((item) => item.id !== exclusion.id)); if (selectedExclusionId === exclusion.id) setSelectedExclusionId(null); }}>×</button></div>)}</div>}
         <div className="map-history-tools"><button onClick={undo} disabled={!undoRef.current.length}>↶ UNDO</button><button onClick={redo} disabled={!redoRef.current.length}>↷ REDO</button></div>
@@ -762,7 +771,7 @@ export function CredibleTakeoffWorkspace() {
           <div><span>Solid stop lines <small>{counters.stop_bar ?? 0} × {currency.format(prices.stop_bar_each)}</small></span><b>{currency.format((counters.stop_bar ?? 0) * prices.stop_bar_each)}</b></div>
         </div>
         <div className="quote-total workspace-home-quote-total"><span>DRAFT TOTAL</span><strong>{currency.format(calculation.total)}</strong></div>
-        <div className="quote-ready workspace-home-quote-ready"><span>{scanError || scanWarnings.length ? "!" : "✓"}</span><div><b>{scanError ? "MANUAL COUNT REQUIRED" : scanWarnings.length ? "OCCLUDED ROWS NEED CONFIRMATION" : "AI SCAN COMPLETE — VERIFY BEFORE SENDING"}</b><small>{scanError || scanWarnings[0] || "Automatic counts can be corrected for trees, shadows, or faded markings"}</small></div></div>
+        <div className="quote-ready workspace-home-quote-ready"><span>{scanError || scanWarnings.length ? "!" : "✓"}</span><div><b>{!aiScanningEnabled ? "MANUAL TAKEOFF REQUIRED" : scanError ? "MANUAL COUNT REQUIRED" : scanWarnings.length ? "OCCLUDED ROWS NEED CONFIRMATION" : "AI SCAN COMPLETE — VERIFY BEFORE SENDING"}</b><small>{!aiScanningEnabled ? "Automated detection is paused pending imagery licensing." : scanError || scanWarnings[0] || "Automatic counts can be corrected for trees, shadows, or faded markings"}</small></div></div>
         <section className="typed-tools">
           <div className="panel-section-title"><span>TYPED ANNOTATIONS</span><small>CLICK TYPE, THEN MAP</small></div>
           <div>{(Object.keys(TYPE_LABELS) as AnnotationType[]).map((type) => <button key={type} className={`type-tool type-${type}`} disabled={!boundary} onClick={() => startDraw(type)}><i style={{ background: ANNOTATION_COLORS[type] }} />{TYPE_LABELS[type]}</button>)}</div>

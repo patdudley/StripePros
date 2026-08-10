@@ -1,4 +1,5 @@
 import { json } from "@/lib/api";
+import { isAiScanningEnabled, SCANNING_SUSPENDED_MESSAGE } from "@/lib/ai-scanning";
 
 type DetectionType = "stall" | "ada" | "arrow" | "access_aisle" | "speed_bump" | "stop_bar";
 type Visibility = "visible" | "partially_supported" | "unknown";
@@ -376,6 +377,7 @@ ADA is strict: use ada only when blue paint belonging to that stall or a legible
 }
 
 export async function POST(request: Request) {
+  if (!isAiScanningEnabled()) return json({ code: "SCANNING_SUSPENDED", message: SCANNING_SUSPENDED_MESSAGE }, 503);
   const apiKey = process.env.OPENAI_API_KEY?.trim();
   if (!apiKey) return json({ error: "AI lot scanning is not configured yet." }, 503);
 

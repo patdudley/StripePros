@@ -112,7 +112,7 @@ function AuthModal({ onAuthenticated, onClose, initialMode, initialError = "" }:
   );
 }
 
-function ProductDemo() {
+function ProductDemo({ aiScanningEnabled }: { aiScanningEnabled: boolean }) {
   const demoMapElementRef = useRef<HTMLDivElement>(null);
   const demoMapRef = useRef<LeafletMap | null>(null);
   const demoLeafletRef = useRef<typeof import("leaflet") | null>(null);
@@ -121,7 +121,7 @@ function ProductDemo() {
   const demoBoundaryRef = useRef<DemoBoundary | null>(null);
   const demoMarkingLayersRef = useRef(new Map<string, LeafletLayer>());
   const demoScanZoomRef = useRef(19);
-  const [phase, setPhase] = useState<"typing" | "selecting" | "scanning" | "quote">("typing");
+  const [phase, setPhase] = useState<"typing" | "selecting" | "paused" | "scanning" | "quote">("typing");
   const [address, setAddress] = useState("");
   const [selectedSite, setSelectedSite] = useState<GeocodeResult | null>(null);
   const [searching, setSearching] = useState(false);
@@ -170,15 +170,19 @@ function ProductDemo() {
         map.scrollWheelZoom.disable();
         map.touchZoom.disable();
         setSelectingLot(false);
-        setScanStage(0);
-        setScanProgress(6);
-        setPhase("scanning");
+        if (aiScanningEnabled) {
+          setScanStage(0);
+          setScanProgress(6);
+          setPhase("scanning");
+        } else {
+          setPhase("paused");
+        }
         map.fitBounds(boundary.getBounds(), { padding: [68, 68], maxZoom: Math.min(demoScanZoomRef.current, LOT_REVIEW_ZOOM), animate: true, duration: .45 });
       });
       await configureDemoImagery();
     })();
     return () => { active = false; map?.remove(); demoMapRef.current = null; demoLeafletRef.current = null; demoTileLayerRef.current = null; demoBoundaryRef.current = null; };
-  }, []);
+  }, [aiScanningEnabled]);
 
   useEffect(() => {
     const map = demoMapRef.current;
@@ -214,7 +218,7 @@ function ProductDemo() {
   }, [demoMarkings]);
 
   useEffect(() => {
-    if (phase !== "scanning" || !selectedSite) return;
+    if (!aiScanningEnabled || phase !== "scanning" || !selectedSite) return;
     const controller = new AbortController();
     const stageTimers = [450, 1200, 1900].map((delay, index) => window.setTimeout(() => setScanStage(index + 1), delay));
     const startedAt = performance.now();
@@ -270,7 +274,7 @@ function ProductDemo() {
       window.clearInterval(progressTimer);
       stageTimers.forEach(window.clearTimeout);
     };
-  }, [phase, selectedSite]);
+  }, [aiScanningEnabled, phase, selectedSite]);
 
   async function configureDemoImagery(site?: GeocodeResult) {
     const map = demoMapRef.current;
@@ -423,7 +427,7 @@ function ProductDemo() {
   }
 
   function retryDemoScan() {
-    if (!selectedSite || !demoBoundaryRef.current) return;
+    if (!aiScanningEnabled || !selectedSite || !demoBoundaryRef.current) return;
     setDetectedCounts(EMPTY_DEMO_COUNTS);
     setDemoMarkings([]);
     setScanError("");
@@ -517,7 +521,7 @@ function ProductDemo() {
           <div className="demo-progress" aria-live="polite">
             <span className={selectedSite ? "done" : "active"}><i>1</i> Address found</span>
             <b />
-            <span className={phase === "selecting" || phase === "scanning" ? "active" : phase === "quote" ? "done" : ""}><i>2</i> {phase === "scanning" ? "Preparing count" : "Lot selected"}</span>
+            <span className={phase === "selecting" || phase === "scanning" ? "active" : phase === "paused" || phase === "quote" ? "done" : ""}><i>2</i> {phase === "scanning" ? "Preparing count" : "Lot selected"}</span>
             <b />
             <span className={phase === "quote" ? "done" : ""}><i>3</i> Quote ready</span>
           </div>
@@ -527,8 +531,9 @@ function ProductDemo() {
             <div ref={demoMapElementRef} className="demo-real-map" aria-label={`Aerial imagery of ${propertyName}`} />
             <div className="demo-step-label demo-map-label"><b>02</b><span>SELECT THE PARKING LOT</span></div>
             {phase === "selecting" && <div className="lot-selection-guide"><strong>DRAW THE LOT BOUNDARY</strong><span>Click each corner around the parking area, then click the first point again to finish.</span></div>}
+            {phase === "paused" && <div className="scanning-suspended-notice" role="status"><strong>AUTOMATED COUNTING IS PAUSED</strong><span>We are licensing imagery approved for machine analysis. Your lot boundary is ready for a manual takeoff.</span><a href="/workspace">OPEN MANUAL WORKSPACE →</a></div>}
             {phase === "scanning" && <><div className="scan-line"><span>{scanStageLabel}</span></div><div className="scan-progress-panel" role="status" aria-live="polite"><i>{scanProgress}%</i><div><strong>ANALYZING PARKING MARKINGS</strong><span><b style={{ width: `${scanProgress}%` }} /></span><small>ESTIMATED PROGRESS · VERIFY RESULTS WHEN COMPLETE</small></div></div></>}
-            {(phase === "selecting" || phase === "scanning" || phase === "quote") && <div className="scan-hud"><span><i /> {imageryDetail}</span><strong>{phase === "selecting" ? "MANUAL LOT SELECTION" : phase === "scanning" ? scanStageLabel : scanError ? "SCAN NEEDS MANUAL REVIEW" : "AI COUNT COMPLETE — REVIEW BELOW"}</strong></div>}
+            {(phase === "selecting" || phase === "paused" || phase === "scanning" || phase === "quote") && <div className="scan-hud"><span><i /> {imageryDetail}</span><strong>{phase === "selecting" ? "MANUAL LOT SELECTION" : phase === "paused" ? "MANUAL TAKEOFF AVAILABLE" : phase === "scanning" ? scanStageLabel : scanError ? "SCAN NEEDS MANUAL REVIEW" : "AI COUNT COMPLETE — REVIEW BELOW"}</strong></div>}
             {phase === "quote" && <div className="sample-detection-overlay"><b>{scanError ? "SCAN COULD NOT VERIFY MARKINGS" : `${mockQuote.stalls + mockQuote.ada + mockQuote.accessAisles + mockQuote.arrows + mockQuote.speedBumps + mockQuote.stopBars} MARKINGS COUNTED${scanConfidence === null ? "" : ` · ${Math.round(scanConfidence * 100)}% CONFIDENCE`}`}</b><small>{scanError || scanWarnings[0] || "Review the totals and correct anything hidden or missed"}</small></div>}
             {phase === "quote" && <>
               <button className="edit-demo-boundary" onClick={toggleDemoBoundary}>{boundaryEditing ? "SAVE LOT OUTLINE" : "EDIT LOT OUTLINE"}</button>
@@ -558,7 +563,7 @@ function ProductDemo() {
   );
 }
 
-function HomeScreen({ onAuthenticated }: { onAuthenticated: (user: User) => void }) {
+function HomeScreen({ onAuthenticated, aiScanningEnabled }: { onAuthenticated: (user: User) => void; aiScanningEnabled: boolean }) {
   const [authMode, setAuthMode] = useState<"signup" | "signin" | null>(null);
   const [authError, setAuthError] = useState("");
 
@@ -582,7 +587,7 @@ function HomeScreen({ onAuthenticated }: { onAuthenticated: (user: User) => void
         <h1>From address to<br /><em>quote in minutes.</em></h1>
         <p>Measure the lot from your desk, price every stripe, and send a proposal that wins the job.</p>
       </section>
-      <div id="product-demo"><ProductDemo /></div>
+      <div id="product-demo"><ProductDemo aiScanningEnabled={aiScanningEnabled} /></div>
       <section className="workflow-section" id="how-it-works">
         <p className="section-kicker">THE WHOLE QUOTE. ONE WORKFLOW.</p>
         <h2>Drive less. Quote more.</h2>
@@ -696,11 +701,11 @@ function Dashboard({ user, onSignOut }: { user: User; onSignOut: () => void }) {
   );
 }
 
-export function StripeProsApp() {
+export function StripeProsApp({ aiScanningEnabled }: { aiScanningEnabled: boolean }) {
   const [user, setUser] = useState<User | null>(null);
   const [checking, setChecking] = useState(true);
   useEffect(() => { api<{ user: User }>("/api/auth/me").then((result) => setUser(result.user)).catch(() => {}).finally(() => setChecking(false)); }, []);
   if (checking) return <div className="boot-screen"><BrandMark /><span>LAYING OUT YOUR WORKSPACE</span></div>;
-  if (!user) return <HomeScreen onAuthenticated={setUser} />;
+  if (!user) return <HomeScreen onAuthenticated={setUser} aiScanningEnabled={aiScanningEnabled} />;
   return <Dashboard user={user} onSignOut={async () => { await api("/api/auth/signout", { method: "POST" }); setUser(null); }} />;
 }

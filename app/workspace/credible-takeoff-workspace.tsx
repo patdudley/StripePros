@@ -13,7 +13,7 @@ import { generateStallRow } from "@/lib/takeoff/row-assist";
 import type { AnnotationReviewStatus, AnnotationType, ExclusionType, LotExclusion, PolygonGeometry, StripingService, TakeoffAnnotation, TakeoffGeometry } from "@/lib/takeoff/types";
 import { ScheduleView } from "./schedule-view";
 
-type GeocodeResult = { label: string; lat: number; lng: number };
+type GeocodeResult = { label: string; lat: number; lng: number; provider?: "google" };
 type AddressSuggestion = GeocodeResult & { primary: string; secondary: string };
 type MapImageryConfig = {
   provider: "esri" | "google" | "mapbox" | "nearmap";
@@ -261,7 +261,7 @@ export function CredibleTakeoffWorkspace() {
       leafletRef.current = L;
       (window as unknown as { L: typeof L }).L = L;
       await import("@geoman-io/leaflet-geoman-free");
-      map = L.map(mapElementRef.current, { center: DEFAULT_CENTER, zoom: 18, zoomControl: false, zoomSnap: .25 });
+      map = L.map(mapElementRef.current, { center: DEFAULT_CENTER, zoom: 18, zoomControl: false, zoomSnap: .25, zoomDelta: .25, wheelPxPerZoomLevel: 180, wheelDebounceTime: 80 });
       mapRef.current = map;
       L.control.zoom({ position: "bottomright" }).addTo(map);
       baseLayerRef.current = L.tileLayer(ESRI_IMAGERY_URL, { maxZoom: 19, maxNativeZoom: 19, crossOrigin: "anonymous", attribution: "Imagery © Esri and contributors" }).addTo(map);
@@ -519,23 +519,28 @@ export function CredibleTakeoffWorkspace() {
       map.invalidateSize(false);
       await new Promise((resolve) => window.setTimeout(resolve, 900));
 
-      const image = await toJpeg(mapElement, {
-        cacheBust: true,
-        pixelRatio: 1.5,
-        quality: .94,
-        backgroundColor: "#11110f",
-        filter: (node) => !(node instanceof HTMLElement && node.classList.contains("leaflet-control-attribution")),
+      const width = mapElement.clientWidth;
+      const height = mapElement.clientHeight;
+      const normalizedBoundary = selectedBoundary.coordinates[0].map(([lng, lat]) => {
+        const point = map.latLngToContainerPoint([lat, lng]);
+        return { x: Math.max(0, Math.min(1, point.x / width)), y: Math.max(0, Math.min(1, point.y / height)) };
       });
+      mapElement.classList.add("clean-scan-capture");
+      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+      let image: string;
+      try {
+        image = await toJpeg(mapElement, { cacheBust: true, pixelRatio: 1.5, quality: .94, backgroundColor: "#11110f" });
+      } finally {
+        mapElement.classList.remove("clean-scan-capture");
+      }
       const response = await fetch("/api/scan-lot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ address: siteAddress, image }),
+        body: JSON.stringify({ address: siteAddress, image, boundary: normalizedBoundary }),
       });
       const result = await response.json() as LotScanResult & { error?: string };
       if (!response.ok) throw new Error(result.error ?? "The AI scan could not be completed.");
 
-      const width = mapElement.clientWidth;
-      const height = mapElement.clientHeight;
       const modelAnnotations: TakeoffAnnotation[] = result.detections.map((detection, index) => {
         const point = map.containerPointToLatLng([detection.x * width, detection.y * height]);
         const type: AnnotationType = detection.type === "stall" ? "standard_stall" : detection.type === "ada" ? "ada_stall" : detection.type === "access_aisle" ? "ada_access_aisle" : "directional_arrow";
@@ -672,6 +677,7 @@ export function CredibleTakeoffWorkspace() {
         <div className={`imagery-chip ${imageryInfo.provider !== "esri" ? "hd" : ""}`}><i /> {imageryInfo.provider.toUpperCase()} IMAGERY <span>{imageryInfo.detail}</span></div>
         {results.length > 1 && <div className="address-results">{results.map((result) => <button key={`${result.lat}-${result.lng}`} onClick={() => selectAddress(result)}>{result.label}</button>)}</div>}
         {searchError && <p className="workspace-error">{searchError}</p>}
+        {selectedSite && <div className="workspace-resolved-address"><b>✓ GOOGLE ADDRESS CONFIRMED</b><span>{selectedSite.label}</span></div>}
       </div>
       <div className={`map-stage ${scanning ? "scanning" : ""}`}>
         <div ref={mapElementRef} className={MAP_CLASS_NAME} data-drawing={Boolean(drawingIntent)} />

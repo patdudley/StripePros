@@ -24,6 +24,12 @@ describe("AI lot scan route", () => {
     expect(routeSource).toContain("Do not assume an access aisle merely because an ADA stall exists");
   });
 
+  it("uses a separately supplied clean-image boundary and rejects obstructed zero results", () => {
+    expect(routeSource).toContain("boundary.length < 3");
+    expect(routeSource).toContain("This is a clean aerial capture with no selection overlay");
+    expect(routeSource).toContain("detections.length === 0 && obstructionWarning");
+  });
+
   it("allows enough time for a dense original-resolution count", () => {
     expect(routeSource).toContain("105_000");
     expect(routeSource).toContain('reasoning: { effort: "medium" }');

@@ -7,7 +7,7 @@ import { PRICE_UNITS, UNIT_LABELS, type PriceUnit } from "@/lib/price-book";
 import { activateTileLayer } from "@/lib/map-imagery";
 
 type User = { id: string; email: string; companyName: string };
-type GeocodeResult = { label: string; lat: number; lng: number };
+type GeocodeResult = { label: string; lat: number; lng: number; provider?: "google" };
 type AddressSuggestion = GeocodeResult & { primary: string; secondary: string };
 type MapImageryConfig = {
   provider: "esri" | "google" | "mapbox" | "nearmap";
@@ -148,7 +148,7 @@ function ProductDemo() {
       demoLeafletRef.current = L;
       (window as unknown as { L: typeof L }).L = L;
       await import("@geoman-io/leaflet-geoman-free");
-      map = L.map(demoMapElementRef.current, { center: [32.7849, -117.1258], zoom: 18, zoomControl: false, zoomSnap: .25, attributionControl: true, zoomAnimation: true, fadeAnimation: true, dragging: false, scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false, touchZoom: false });
+      map = L.map(demoMapElementRef.current, { center: [32.7849, -117.1258], zoom: 18, zoomControl: false, zoomSnap: .25, zoomDelta: .25, wheelPxPerZoomLevel: 180, wheelDebounceTime: 80, attributionControl: true, zoomAnimation: true, fadeAnimation: true, dragging: false, scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false, touchZoom: false });
       demoMapRef.current = map;
       demoTileLayerRef.current = L.tileLayer(ESRI_IMAGERY_URL, { maxZoom: 19, maxNativeZoom: 19, crossOrigin: "anonymous", attribution: "Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community" }).addTo(map);
       map.on("pm:create", (rawEvent) => {
@@ -220,27 +220,36 @@ function ProductDemo() {
         setScanWarnings([]);
         await new Promise((resolve) => window.setTimeout(resolve, 900));
         if (controller.signal.aborted || !demoMapElementRef.current || !demoMapRef.current) return;
-        const { toJpeg } = await import("html-to-image");
-        const image = await toJpeg(demoMapElementRef.current, {
-          cacheBust: true,
-          pixelRatio: 1.5,
-          quality: .94,
-          backgroundColor: "#11110f",
-          filter: (node) => !(node instanceof HTMLElement && node.classList.contains("leaflet-control-attribution")),
+        const mapElement = demoMapElementRef.current;
+        const map = demoMapRef.current;
+        const boundary = demoBoundaryRef.current;
+        if (!boundary) throw new Error("The selected lot boundary is missing.");
+        const width = mapElement.clientWidth;
+        const height = mapElement.clientHeight;
+        const latLngs = boundary.getLatLngs()[0] as import("leaflet").LatLng[];
+        const boundaryPoints = latLngs.map((latLng) => {
+          const point = map.latLngToContainerPoint(latLng);
+          return { x: Math.max(0, Math.min(1, point.x / width)), y: Math.max(0, Math.min(1, point.y / height)) };
         });
+        const { toJpeg } = await import("html-to-image");
+        mapElement.classList.add("clean-scan-capture");
+        await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+        let image: string;
+        try {
+          image = await toJpeg(mapElement, { cacheBust: true, pixelRatio: 1.5, quality: .94, backgroundColor: "#11110f" });
+        } finally {
+          mapElement.classList.remove("clean-scan-capture");
+        }
         const result = await api<LotScanResult>("/api/scan-lot", {
           method: "POST",
           signal: controller.signal,
-          body: JSON.stringify({ address: selectedSite.label, image }),
+          body: JSON.stringify({ address: selectedSite.label, image, boundary: boundaryPoints }),
         });
         if (controller.signal.aborted || !demoMapRef.current || !demoMapElementRef.current) return;
 
         setDetectedCounts({ stalls: result.stalls, ada: result.ada, arrows: result.arrows, accessAisles: result.accessAisles });
         setScanConfidence(result.confidence);
         setScanWarnings(result.warnings);
-        const map = demoMapRef.current;
-        const width = demoMapElementRef.current.clientWidth;
-        const height = demoMapElementRef.current.clientHeight;
         setDemoMarkings(result.detections.map((detection, index) => {
           const point = map.containerPointToLatLng([detection.x * width, detection.y * height]);
           return { id: `auto-${index}-${crypto.randomUUID()}`, type: detection.type, lat: point.lat, lng: point.lng, source: "auto" };
@@ -458,6 +467,7 @@ function ProductDemo() {
       const result = hadSelectedSite ? null : await api<{ results: GeocodeResult[] }>(`/api/geocode?q=${encodeURIComponent(address)}`);
       const site = selectedSite ?? result?.results[0];
       if (!site) throw new Error("We could not find that address. Try including the city and state.");
+      setAddress(site.label);
       setSelectedSite(site);
       if (!hadSelectedSite) {
         demoMapRef.current?.stop();
@@ -510,6 +520,7 @@ function ProductDemo() {
             </div>}
           </form>
           {searchError && <p className="demo-search-error" role="alert">{searchError}</p>}
+          {selectedSite && <div className="resolved-address-confirmation"><b>✓ GOOGLE ADDRESS CONFIRMED</b><span>{selectedSite.label}</span></div>}
           <div className="demo-progress" aria-live="polite">
             <span className={selectedSite ? "done" : "active"}><i>1</i> Address found</span>
             <b />

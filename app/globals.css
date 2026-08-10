@@ -113,6 +113,9 @@ button { cursor: pointer; }
 .demo-suggestions strong { font-size: 9px; }
 .demo-suggestions small { color: #77736c; font-size: 7px; }
 .demo-search-error { margin: 9px 0 0 !important; color: #8b2e20 !important; font-size: 8px !important; font-weight: 800; line-height: 1.35 !important; }
+.resolved-address-confirmation { margin-top: 8px; display: grid; gap: 3px; border-left: 3px solid #56c97c; background: #eff9f1; padding: 7px 9px; }
+.resolved-address-confirmation b { color: #26753e; font: 900 7px monospace; letter-spacing: .08em; }
+.resolved-address-confirmation span { overflow: hidden; color: #555149; font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
 .demo-progress { margin: 22px 0 0; display: grid; grid-template-columns: 1fr; align-items: center; gap: 8px; }
 .demo-progress > span { display: flex; align-items: center; gap: 7px; color: #aaa69c; font: 700 8px monospace; letter-spacing: .08em; white-space: nowrap; }
 .demo-progress > span i { width: 18px; height: 18px; display: grid; place-items: center; border-radius: 50%; border: 1px solid #c9c5ba; font-style: normal; }
@@ -392,6 +395,10 @@ button { cursor: pointer; }
 .address-results button { width: 100%; border: 0; border-bottom: 1px solid #e5e2da; background: #fff; padding: 10px; text-align: left; font-size: 10px; }
 .address-results button:hover { background: #fff5d3; }
 .workspace-error { position: absolute; top: 48px; left: 12px; margin: 0; background: #441d16; color: #fff; padding: 8px 11px; font-size: 9px; }
+.workspace-resolved-address { position: absolute; z-index: 1000; top: 49px; left: 12px; max-width: 530px; display: flex; gap: 8px; border: 1px solid #79b98a; background: #eff9f1; padding: 7px 9px; color: #315f3d; font-size: 7px; }
+.workspace-resolved-address b { font: 900 7px monospace; letter-spacing: .06em; white-space: nowrap; }
+.workspace-resolved-address span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.clean-scan-capture .leaflet-overlay-pane, .clean-scan-capture .leaflet-tooltip-pane, .clean-scan-capture .leaflet-marker-pane, .clean-scan-capture .leaflet-control-container { visibility: hidden !important; }
 .map-stage { position: relative; min-width: 0; min-height: 0; overflow: hidden; background: #4c5048; }
 .live-map { width: 100%; height: 100%; min-height: 520px; }
 .map-instructions { position: absolute; z-index: 800; top: 13px; right: 13px; display: grid; gap: 3px; width: 153px; padding: 12px; border: 1px solid rgba(255,255,255,.26); background: rgba(17,17,15,.9); color: white; backdrop-filter: blur(5px); }

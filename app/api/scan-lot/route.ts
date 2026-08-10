@@ -3,6 +3,8 @@ import { json } from "@/lib/api";
 type DetectionType = "stall" | "ada" | "arrow" | "access_aisle";
 type ScanDetection = { type: DetectionType; x: number; y: number; confidence: number };
 type ScanPayload = {
+  imageUsable?: unknown;
+  failureReason?: unknown;
   confidence?: unknown;
   summary?: unknown;
   warnings?: unknown;
@@ -42,26 +44,36 @@ export async function POST(request: Request) {
   const apiKey = process.env.OPENAI_API_KEY?.trim();
   if (!apiKey) return json({ error: "AI lot scanning is not configured yet." }, 503);
 
-  let body: { address?: unknown; image?: unknown };
+  let body: { address?: unknown; image?: unknown; boundary?: unknown };
   try {
-    body = await request.json() as { address?: unknown; image?: unknown };
+    body = await request.json() as { address?: unknown; image?: unknown; boundary?: unknown };
   } catch {
     return json({ error: "The lot scan request was not valid JSON." }, 400);
   }
 
   const address = typeof body.address === "string" ? body.address.trim().slice(0, 300) : "";
   const image = typeof body.image === "string" ? body.image : "";
+  const boundary = Array.isArray(body.boundary) ? body.boundary.flatMap((value) => {
+    if (!value || typeof value !== "object") return [];
+    const point = value as { x?: unknown; y?: unknown };
+    const x = Number(point.x);
+    const y = Number(point.y);
+    return Number.isFinite(x) && Number.isFinite(y) && x >= 0 && x <= 1 && y >= 0 && y <= 1 ? [{ x, y }] : [];
+  }).slice(0, 100) : [];
   if (!address) return json({ error: "A property address is required." }, 400);
   if (!image.startsWith("data:image/jpeg;base64,") && !image.startsWith("data:image/png;base64,")) {
     return json({ error: "A captured aerial image is required." }, 400);
   }
   if (image.length > MAX_IMAGE_LENGTH) return json({ error: "The aerial capture is too large to scan." }, 413);
+  if (boundary.length < 3) return json({ error: "A valid lot boundary is required for the clean scan." }, 400);
 
   const schema = {
     type: "object",
     additionalProperties: false,
-    required: ["confidence", "summary", "warnings", "detections"],
+    required: ["imageUsable", "failureReason", "confidence", "summary", "warnings", "detections"],
     properties: {
+      imageUsable: { type: "boolean" },
+      failureReason: { type: "string" },
       confidence: { type: "number", minimum: 0, maximum: 1 },
       summary: { type: "string" },
       warnings: { type: "array", items: { type: "string" }, maxItems: 8 },
@@ -102,11 +114,11 @@ export async function POST(request: Request) {
           content: [
             {
               type: "input_text",
-              text: `Act as a conservative parking-lot striping takeoff reviewer. The property is ${address}. Analyze only pavement inside the yellow dashed polygon in this aerial screenshot.
+              text: `Act as a conservative parking-lot striping takeoff reviewer. The property is ${address}. This is a clean aerial capture with no selection overlay. Analyze only pixels inside this normalized image-coordinate polygon: ${JSON.stringify(boundary)}.
 
 Work row by row, clockwise from the top-left of the selected pavement. Return one detection for every visible painted marking and put its center at normalized image coordinates x/y from 0 to 1. A standard stall is one non-ADA parking space defined by its visible separator/end lines, whether occupied or empty. An ADA stall is counted separately and must not also be counted as a standard stall. Count painted directional traffic arrows only when the arrow shape is visible. Return access_aisle for each clearly visible ADA access aisle or striped accessible path beside an ADA stall, placing the marker in the center of its diagonal hatching. Do not assume an access aisle merely because an ADA stall exists. Do not count vehicles, curbs, ordinary crosswalk bars, parking-lot islands, lane lines, the yellow selection outline, buildings, UI controls, or inferred spaces hidden by trees/shadows/roofs.
 
-Every count shown to the user will be derived from your detection list, so include exactly one localized detection per marking. If a marking is blocked or ambiguous, omit it and describe the blocked zone in warnings instead of guessing. Keep the summary short and state what was visibly counted.`,
+Every count shown to the user will be derived from your detection list, so include exactly one localized detection per marking. Set imageUsable false when imagery or an obstruction prevents a reliable review and explain why in failureReason. If an individual marking is blocked or ambiguous, omit it and describe the blocked zone in warnings instead of guessing. Keep the summary short and state what was visibly counted.`,
             },
             { type: "input_image", image_url: image, detail: "original" },
           ],
@@ -132,6 +144,11 @@ Every count shown to the user will be derived from your detection list, so inclu
     const accessAisles = detections.filter((item) => item.type === "access_aisle").length;
     const confidence = Number(parsed.confidence);
     const warnings = Array.isArray(parsed.warnings) ? parsed.warnings.filter((item): item is string => typeof item === "string").map((item) => item.slice(0, 220)).slice(0, 8) : [];
+    const obstructionWarning = warnings.some((warning) => /obscur|overlay|blocked|unusable|hidden|label|cannot verify/i.test(warning));
+    if (parsed.imageUsable !== true || (detections.length === 0 && obstructionWarning)) {
+      const reason = typeof parsed.failureReason === "string" && parsed.failureReason.trim() ? parsed.failureReason.trim().slice(0, 220) : warnings[0] || "The aerial image could not be reviewed reliably.";
+      return json({ error: `${reason} A clean retry is ready.` }, 422);
+    }
 
     return json({
       stalls,

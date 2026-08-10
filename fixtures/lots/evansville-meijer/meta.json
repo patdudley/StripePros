@@ -1,0 +1,44 @@
+{
+  "fixture_id": "evansville-meijer",
+  "source": "indiana: in2023_28321002_06",
+  "source_url": "https://di-ingov.img.arcgis.com/arcgis/rest/services/DynamicWebMercator/Indiana_Current_Imagery/ImageServer",
+  "license": "Creative Commons Zero (CC0)",
+  "license_verified_at": "2026-08-10",
+  "attribution": "Indiana Geographic Information Office (IGIO)",
+  "capture_date": "2023",
+  "nominal_resolution_m": 0.15236140776585474,
+  "source_gsd_m": 0.15240030480060962,
+  "crs": "EPSG:4326",
+  "bbox": [
+    -87.49655,
+    37.99905,
+    -87.49384,
+    38.0017
+  ],
+  "resolution_tier": "15cm",
+  "lot_profile": [
+    "dense_vehicles",
+    "faded_paint"
+  ],
+  "source_attributes": {
+    "OBJECTID": 236326,
+    "Name": "in2023_28321002_06",
+    "MinPS": 0,
+    "MaxPS": 1.21920243840488,
+    "LowPS": 0.15240030480060962,
+    "HighPS": 0.30480060960121924,
+    "Category": 1,
+    "Tag": "Dataset",
+    "GroupName": "",
+    "ProductName": "",
+    "CenterX": -9740046.305305863,
+    "CenterY": 4579895.593482587,
+    "ZOrder": 4046,
+    "Image_Year": "2023",
+    "County": "Vanderburgh",
+    "Pixel_Size": "06 in.",
+    "Shape_Length": 3871.3885297481293,
+    "Shape_Area": 936723.9869219458
+  },
+  "acquisition_status": "verified"
+}

@@ -1,0 +1,14 @@
+{
+  "lots": [
+    { "fixture_id": "fort-wayne-school", "bbox": [-85.13955, 40.9983, -85.13685, 41.00115], "profile": ["large_multi_row", "dense_vehicles"] },
+    { "fixture_id": "fort-wayne-lot-7", "bbox": [-85.1145, 41.11515, -85.1118, 41.11816], "profile": ["large_multi_row", "tree_shadow"] },
+    { "fixture_id": "fort-wayne-small", "bbox": [-85.22535, 41.05455, -85.2222, 41.05646], "profile": ["clean_retail", "ada"] },
+    { "fixture_id": "fort-wayne-north", "bbox": [-85.14985, 41.17325, -85.14745, 41.17565], "profile": ["tree_shadow", "dense_vehicles"] },
+    { "fixture_id": "lafayette-asphalt", "bbox": [-86.87458, 40.41347, -86.87208, 40.41528], "profile": ["clean_retail", "ada"] },
+    { "fixture_id": "lafayette-mid", "bbox": [-86.90382, 40.38788, -86.9009, 40.3896], "profile": ["clean_retail", "angled_parking"] },
+    { "fixture_id": "lafayette-large", "bbox": [-86.8505, 40.38838, -86.8474, 40.39022], "profile": ["faded_paint"] },
+    { "fixture_id": "evansville-meijer", "bbox": [-87.49655, 37.99905, -87.49384, 38.0017], "profile": ["dense_vehicles", "faded_paint"] },
+    { "fixture_id": "evansville-lot-b", "bbox": [-87.67598, 37.96366, -87.67305, 37.96568], "profile": ["clean_paint", "large_multi_row"] },
+    { "fixture_id": "evansville-asphalt", "bbox": [-87.51132, 37.95503, -87.50945, 37.95722], "profile": ["faded_paint", "tree_shadow"] }
+  ]
+}

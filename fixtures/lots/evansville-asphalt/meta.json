@@ -1,0 +1,44 @@
+{
+  "fixture_id": "evansville-asphalt",
+  "source": "indiana: in2023_28270985_06",
+  "source_url": "https://di-ingov.img.arcgis.com/arcgis/rest/services/DynamicWebMercator/Indiana_Current_Imagery/ImageServer",
+  "license": "Creative Commons Zero (CC0)",
+  "license_verified_at": "2026-08-10",
+  "attribution": "Indiana Geographic Information Office (IGIO)",
+  "capture_date": "2023",
+  "nominal_resolution_m": 0.15238875200957702,
+  "source_gsd_m": 0.15240030480060962,
+  "crs": "EPSG:4326",
+  "bbox": [
+    -87.51132,
+    37.95503,
+    -87.50945,
+    37.95722
+  ],
+  "resolution_tier": "15cm",
+  "lot_profile": [
+    "faded_paint",
+    "tree_shadow"
+  ],
+  "source_attributes": {
+    "OBJECTID": 235367,
+    "Name": "in2023_28270985_06",
+    "MinPS": 0,
+    "MaxPS": 1.21920243840488,
+    "LowPS": 0.15240030480060962,
+    "HighPS": 0.30480060960121924,
+    "Category": 1,
+    "Tag": "Dataset",
+    "GroupName": "",
+    "ProductName": "",
+    "CenterX": -9741946.707663016,
+    "CenterY": 4573100.011017938,
+    "ZOrder": 4046,
+    "Image_Year": "2023",
+    "County": "Vanderburgh",
+    "Pixel_Size": "06 in.",
+    "Shape_Length": 3868.8667310891815,
+    "Shape_Area": 935504.0212043956
+  },
+  "acquisition_status": "verified"
+}

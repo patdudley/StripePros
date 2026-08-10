@@ -1,3 +1,74 @@
 {
-  "fixtures": []
+  "fixtures": [
+    {
+      "fixture_id": "evansville-asphalt",
+      "path": "lots/evansville-asphalt",
+      "analysis_allowed": true,
+      "persist_pixels_allowed": true,
+      "train_models_allowed": true
+    },
+    {
+      "fixture_id": "evansville-lot-b",
+      "path": "lots/evansville-lot-b",
+      "analysis_allowed": true,
+      "persist_pixels_allowed": true,
+      "train_models_allowed": true
+    },
+    {
+      "fixture_id": "evansville-meijer",
+      "path": "lots/evansville-meijer",
+      "analysis_allowed": true,
+      "persist_pixels_allowed": true,
+      "train_models_allowed": true
+    },
+    {
+      "fixture_id": "fort-wayne-lot-7",
+      "path": "lots/fort-wayne-lot-7",
+      "analysis_allowed": true,
+      "persist_pixels_allowed": true,
+      "train_models_allowed": true
+    },
+    {
+      "fixture_id": "fort-wayne-north",
+      "path": "lots/fort-wayne-north",
+      "analysis_allowed": true,
+      "persist_pixels_allowed": true,
+      "train_models_allowed": true
+    },
+    {
+      "fixture_id": "fort-wayne-school",
+      "path": "lots/fort-wayne-school",
+      "analysis_allowed": true,
+      "persist_pixels_allowed": true,
+      "train_models_allowed": true
+    },
+    {
+      "fixture_id": "fort-wayne-small",
+      "path": "lots/fort-wayne-small",
+      "analysis_allowed": true,
+      "persist_pixels_allowed": true,
+      "train_models_allowed": true
+    },
+    {
+      "fixture_id": "lafayette-asphalt",
+      "path": "lots/lafayette-asphalt",
+      "analysis_allowed": true,
+      "persist_pixels_allowed": true,
+      "train_models_allowed": true
+    },
+    {
+      "fixture_id": "lafayette-large",
+      "path": "lots/lafayette-large",
+      "analysis_allowed": true,
+      "persist_pixels_allowed": true,
+      "train_models_allowed": true
+    },
+    {
+      "fixture_id": "lafayette-mid",
+      "path": "lots/lafayette-mid",
+      "analysis_allowed": true,
+      "persist_pixels_allowed": true,
+      "train_models_allowed": true
+    }
+  ]
 }

@@ -1,0 +1,44 @@
+{
+  "fixture_id": "fort-wayne-school",
+  "source": "indiana: in2024_04722095_06",
+  "source_url": "https://di-ingov.img.arcgis.com/arcgis/rest/services/DynamicWebMercator/Indiana_Current_Imagery/ImageServer",
+  "license": "Creative Commons Zero (CC0)",
+  "license_verified_at": "2026-08-10",
+  "attribution": "Indiana Geographic Information Office (IGIO)",
+  "capture_date": "2024",
+  "nominal_resolution_m": 0.1523772189910646,
+  "source_gsd_m": 0.15240030480060962,
+  "crs": "EPSG:4326",
+  "bbox": [
+    -85.13955,
+    40.9983,
+    -85.13685,
+    41.00115
+  ],
+  "resolution_tier": "15cm",
+  "lot_profile": [
+    "large_multi_row",
+    "dense_vehicles"
+  ],
+  "source_attributes": {
+    "OBJECTID": 223773,
+    "Name": "in2024_04722095_06",
+    "MinPS": 0,
+    "MaxPS": 1.21920243840488,
+    "LowPS": 0.15240030480060962,
+    "HighPS": 0.30480060960121924,
+    "Category": 1,
+    "Tag": "Dataset",
+    "GroupName": "",
+    "ProductName": "",
+    "CenterX": -9477621.085060267,
+    "CenterY": 5012668.310454244,
+    "ZOrder": 4048,
+    "Image_Year": null,
+    "County": null,
+    "Pixel_Size": null,
+    "Shape_Length": 4040.736890772141,
+    "Shape_Area": 1020468.4174108566
+  },
+  "acquisition_status": "verified"
+}

@@ -17,7 +17,7 @@ describe("AI lot scan route", () => {
 
   it("does not guess markings hidden by blocked zones", () => {
     expect(routeSource).toContain("occludedRows");
-    expect(routeSource).toContain("do not silently omit it");
+    expect(routeSource).toContain("Do not silently omit an uncertain row");
   });
 
   it("localizes visible ADA access aisles without inferring one from an ADA stall", () => {
@@ -32,13 +32,14 @@ describe("AI lot scan route", () => {
 
   it("uses overlapping clean-image sections and rejects obstructed zero results", () => {
     expect(routeSource).toContain("sections.length < 2");
-    expect(routeSource).toContain("overlapping high-resolution aerial sections");
+    expect(routeSource).toContain("single focused high-resolution aerial section");
     expect(routeSource).toContain("detections.length === 0 && occludedRows.length > 0");
   });
 
   it("runs a second verification pass and allows enough time for dense crops", () => {
-    expect(routeSource).toContain("runVisionPass(apiKey, address, sections, controller.signal, scout)");
-    expect(routeSource).toContain("175_000");
+    expect(routeSource).toContain("mapWithConcurrency(sections, 3");
+    expect(routeSource).toContain("runVisionPass(apiKey, address, [section], controller.signal, scouts[index])");
+    expect(routeSource).toContain("240_000");
     expect(routeSource).toContain("max_output_tokens: 12_000");
   });
 });

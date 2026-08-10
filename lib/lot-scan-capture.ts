@@ -43,8 +43,8 @@ function splitBounds(boundary: LatLng[]) {
   const longitudeSpan = Math.max((east - west) * Math.cos(((north + south) / 2) * Math.PI / 180), 0.00001);
   const vertical = latitudeSpan >= longitudeSpan;
   const aspect = Math.max(latitudeSpan, longitudeSpan) / Math.min(latitudeSpan, longitudeSpan);
-  const sectionCount = aspect >= 2.25 ? 4 : aspect >= 1.35 ? 3 : 2;
-  const overlap = 0.22;
+  const sectionCount = aspect >= 3 ? 6 : aspect >= 2 ? 5 : aspect >= 1.25 ? 3 : 2;
+  const overlap = 0.2;
   const start = vertical ? south : west;
   const end = vertical ? north : east;
   const span = end - start;
@@ -102,7 +102,7 @@ export async function captureLotScanSections({
       const clippedBoundary = clipPolygon(projectedBoundary);
       if (clippedBoundary.length < 3) continue;
       const bounds = map.getBounds();
-      const image = await toJpeg(mapElement, { cacheBust: true, pixelRatio: 2, quality: .95, backgroundColor: "#11110f" });
+      const image = await toJpeg(mapElement, { cacheBust: true, pixelRatio: 2.25, quality: .96, backgroundColor: "#11110f" });
       sections.push({
         id: `section-${index + 1}`,
         image,

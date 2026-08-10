@@ -17,7 +17,7 @@ type ScanPayload = {
 };
 
 const MAX_IMAGE_LENGTH = 12_000_000;
-const MAX_TOTAL_IMAGE_LENGTH = 36_000_000;
+const MAX_TOTAL_IMAGE_LENGTH = 60_000_000;
 
 function extractOutputText(payload: unknown) {
   if (!payload || typeof payload !== "object") return "";
@@ -55,7 +55,7 @@ function normalizeSections(value: unknown): ScanSection[] {
     if ((!image.startsWith("data:image/jpeg;base64,") && !image.startsWith("data:image/png;base64,")) || image.length > MAX_IMAGE_LENGTH || boundary.length < 3) return [];
     if (!Object.values(viewport).every(Number.isFinite) || viewport.north <= viewport.south || viewport.east <= viewport.west) return [];
     return [{ id: `section-${index + 1}`, image, boundary, viewport }];
-  }).slice(0, 4);
+  }).slice(0, 6);
 }
 
 function normalizeDetection(value: unknown, sectionIds: Set<string>): ModelDetection | null {
@@ -106,10 +106,27 @@ function distanceFeet(a: LocatedDetection, b: LocatedDetection) {
 
 export function mergeOverlappingDetections(detections: LocatedDetection[]) {
   return [...detections].sort((a, b) => b.confidence - a.confidence).reduce<LocatedDetection[]>((merged, candidate) => {
-    const duplicate = merged.some((accepted) => accepted.type === candidate.type && accepted.sectionId !== candidate.sectionId && distanceFeet(accepted, candidate) <= (candidate.type === "stall" ? 6 : 5));
+    const duplicate = merged.some((accepted) => {
+      if (accepted.type !== candidate.type) return false;
+      const threshold = accepted.sectionId === candidate.sectionId ? 2.5 : candidate.type === "stall" ? 6 : 5;
+      return distanceFeet(accepted, candidate) <= threshold;
+    });
     if (!duplicate) merged.push(candidate);
     return merged;
   }, []);
+}
+
+async function mapWithConcurrency<T, R>(items: T[], concurrency: number, worker: (item: T, index: number) => Promise<R>) {
+  const output = new Array<R>(items.length);
+  let nextIndex = 0;
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      output[index] = await worker(items[index], index);
+    }
+  }));
+  return output;
 }
 
 function scanSchema(sectionIds: string[]) {
@@ -163,7 +180,7 @@ async function runVisionPass(apiKey: string, address: string, sections: ScanSect
   const sectionGuide = sections.map((section) => ({ sectionId: section.id, boundary: section.boundary }));
   const prompt = verificationSource
     ? `Perform a second, independent verification of a parking-lot takeoff for ${address}. The first pass JSON is below. Recount every section row-by-row from the images; correct missed or false detections rather than merely agreeing with it. Overlapping images may contain the same marking, but still localize it in the clearest section. Keep every genuinely occluded or cut-off row in occludedRows for manual confirmation. Never estimate from lot area.\nFIRST PASS:\n${JSON.stringify(verificationSource).slice(0, 45_000)}\nSECTION BOUNDARIES:\n${JSON.stringify(sectionGuide)}`
-    : `Review the overlapping high-resolution aerial sections for ${address}. Analyze only pixels inside each section's normalized polygon: ${JSON.stringify(sectionGuide)}. Work row-by-row in every section and assign a stable rowId such as north-01 or east-02. Return one localized detection at the center of every visible marking. A stall is one visible non-ADA parking space; an ADA stall is separate and must not also be a standard stall. Count a directional arrow only when its painted arrow shape is visible. Count access_aisle only for clearly visible ADA hatching or a striped accessible path. Count speed_bump once for each clearly visible transverse raised speed bump or speed hump spanning a drive aisle; do not confuse stop bars, crosswalks, shadows, or pavement seams with speed bumps. Do not infer markings hidden by trees, shadows, roofs, solar canopies, vehicles, or image edges. Put every partly or fully occluded row in occludedRows with a precise reason; do not silently omit it and do not estimate from lot size. Ignore buildings, curbs, islands, lane lines, crosswalk bars, and UI. Duplicates from overlapping sections are expected and will be merged geographically.`;
+    : `Review this single focused high-resolution aerial section for ${address}. Analyze only pixels inside its normalized polygon: ${JSON.stringify(sectionGuide)}. First enumerate every parking row and every drive aisle. Then inspect each row from one end to the other and assign a stable rowId such as north-01 or east-02. Return one localized detection centered in every visible marking. A stall is one non-ADA parking space bounded by visible separator lines or clearly visible separator endpoints; count it even when a parked vehicle or canopy hides the stall interior, provided both boundaries are visually supported. Never derive a row count from length or lot area. An ADA stall is separate and must not also be a standard stall. Traverse every drive aisle from end to end and count every painted directional arrow whose arrowhead and shaft are visually supported, including repeated arrows in sequence. Count access_aisle only for clearly visible ADA hatching or a striped accessible path. Count speed_bump once for each clearly visible transverse raised speed bump or speed hump spanning a drive aisle; do not confuse stop bars, crosswalks, shadows, or pavement seams with speed bumps. If the boundaries needed to verify a stall or marking are hidden by trees, deep shadows, roofs, solar canopies, or image edges, do not invent it: put that specific row in occludedRows for manual confirmation. Do not silently omit an uncertain row. Ignore buildings, curbs, islands, lane lines, crosswalk bars, and UI. Overlap with neighboring sections is expected and will be merged geographically.`;
   const content: Array<Record<string, unknown>> = [{ type: "input_text", text: prompt }];
   for (const section of sections) {
     content.push({ type: "input_text", text: `Image ${section.id}. Its countable boundary is ${JSON.stringify(section.boundary)}.` });
@@ -207,10 +224,19 @@ export async function POST(request: Request) {
   if (sections.reduce((total, section) => total + section.image.length, 0) > MAX_TOTAL_IMAGE_LENGTH) return json({ error: "The aerial sections are too large to scan together." }, 413);
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 175_000);
+  const timeout = setTimeout(() => controller.abort(), 240_000);
   try {
-    const scout = await runVisionPass(apiKey, address, sections, controller.signal);
-    const verified = await runVisionPass(apiKey, address, sections, controller.signal, scout);
+    const scouts = await mapWithConcurrency(sections, 3, (section) => runVisionPass(apiKey, address, [section], controller.signal));
+    const verifiedSections = await mapWithConcurrency(sections, 3, (section, index) => runVisionPass(apiKey, address, [section], controller.signal, scouts[index]));
+    const verified: ScanPayload = {
+      imageUsable: verifiedSections.some((section) => section.imageUsable === true),
+      failureReason: verifiedSections.filter((section) => section.imageUsable !== true).map((section) => section.failureReason).filter((reason): reason is string => typeof reason === "string").join(" "),
+      confidence: verifiedSections.reduce((total, section) => total + (Number.isFinite(Number(section.confidence)) ? Number(section.confidence) : 0), 0) / verifiedSections.length,
+      summary: verifiedSections.map((section) => section.summary).filter((summary): summary is string => typeof summary === "string").join(" ").slice(0, 300),
+      warnings: verifiedSections.flatMap((section) => Array.isArray(section.warnings) ? section.warnings : []),
+      detections: verifiedSections.flatMap((section) => Array.isArray(section.detections) ? section.detections : []),
+      occludedRows: verifiedSections.flatMap((section) => Array.isArray(section.occludedRows) ? section.occludedRows : []),
+    };
     const sectionIds = new Set(sections.map((section) => section.id));
     const normalized = Array.isArray(verified.detections) ? verified.detections.map((item) => normalizeDetection(item, sectionIds)).filter((item): item is ModelDetection => Boolean(item)) : [];
     const located = normalized.flatMap((detection) => {
@@ -246,7 +272,7 @@ export async function POST(request: Request) {
       detections: detections.map(({ type, confidence: detectionConfidence, lat, lng, rowId }) => ({ type, confidence: detectionConfidence, lat, lng, rowId })),
     });
   } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") return json({ error: "The multi-section AI scan exceeded 175 seconds. Retry once or confirm the flagged rows manually." }, 504);
+    if (error instanceof Error && error.name === "AbortError") return json({ error: "The multi-section AI scan exceeded four minutes. Retry once or confirm the flagged rows manually." }, 504);
     return json({ error: error instanceof Error ? `AI lot scan failed: ${error.message}` : "The AI lot scan could not be completed." }, 502);
   } finally {
     clearTimeout(timeout);

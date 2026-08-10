@@ -25,4 +25,9 @@ describe("homepage lot counting", () => {
     expect(homepageSource).toContain('adjustDetectedCount("ada", -1)');
     expect(homepageSource).toContain('adjustDetectedCount("arrows", -1)');
   });
+
+  it("offers a real retry when the model times out", () => {
+    expect(homepageSource).toContain("function retryDemoScan()");
+    expect(homepageSource).toContain("RETRY AI SCAN");
+  });
 });

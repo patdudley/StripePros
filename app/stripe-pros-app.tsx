@@ -213,7 +213,7 @@ function ProductDemo() {
         const { toJpeg } = await import("html-to-image");
         const image = await toJpeg(demoMapElementRef.current, {
           cacheBust: true,
-          pixelRatio: 2,
+          pixelRatio: 1.5,
           quality: .94,
           backgroundColor: "#11110f",
           filter: (node) => !(node instanceof HTMLElement && node.classList.contains("leaflet-control-attribution")),
@@ -407,6 +407,17 @@ function ProductDemo() {
     setDetectedCounts((current) => ({ ...current, [key]: Math.max(0, current[key] + delta) }));
   }
 
+  function retryDemoScan() {
+    if (!selectedSite || !demoBoundaryRef.current) return;
+    setDetectedCounts(EMPTY_DEMO_COUNTS);
+    setDemoMarkings([]);
+    setScanError("");
+    setScanConfidence(null);
+    setScanWarnings([]);
+    setScanStage(0);
+    setPhase("scanning");
+  }
+
   function selectSuggestion(site: AddressSuggestion) {
     suppressSuggestionsRef.current = true;
     setAddress(site.label);
@@ -505,6 +516,7 @@ function ProductDemo() {
                 <small>Use the controls below to correct totals. Tap a manually placed marker to remove it.</small>
               </div>
               <button className="edit-demo-boundary" onClick={toggleDemoBoundary}>{boundaryEditing ? "SAVE LOT OUTLINE" : "EDIT LOT OUTLINE"}</button>
+              {scanError && <button className="retry-demo-scan" onClick={retryDemoScan}>RETRY AI SCAN</button>}
               <div className="map-summary editable"><div><span>STALLS</span><b><button onClick={() => adjustDetectedCount("stalls", -1)} aria-label="Remove one stall">−</button>{mockQuote.stalls}<button onClick={() => adjustDetectedCount("stalls", 1)} aria-label="Add one stall">＋</button></b></div><div><span>ADA</span><b><button onClick={() => adjustDetectedCount("ada", -1)} aria-label="Remove one ADA stall">−</button>{mockQuote.ada}<button onClick={() => adjustDetectedCount("ada", 1)} aria-label="Add one ADA stall">＋</button></b></div><div><span>ARROWS</span><b><button onClick={() => adjustDetectedCount("arrows", -1)} aria-label="Remove one arrow">−</button>{mockQuote.arrows}<button onClick={() => adjustDetectedCount("arrows", 1)} aria-label="Add one arrow">＋</button></b></div></div>
             </>}
           </div>

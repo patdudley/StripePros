@@ -84,7 +84,7 @@ export async function POST(request: Request) {
   };
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 55_000);
+  const timeout = setTimeout(() => controller.abort(), 105_000);
   try {
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
@@ -95,7 +95,8 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify({
         model: "gpt-5.6",
-        reasoning: { effort: "high" },
+        reasoning: { effort: "medium" },
+        max_output_tokens: 8_000,
         input: [{
           role: "user",
           content: [
@@ -103,7 +104,7 @@ export async function POST(request: Request) {
               type: "input_text",
               text: `Act as a conservative parking-lot striping takeoff reviewer. The property is ${address}. Analyze only pavement inside the yellow dashed polygon in this aerial screenshot.
 
-Return one detection for every visible painted marking and put its center at normalized image coordinates x/y from 0 to 1. A standard stall is one non-ADA parking space defined by its visible separator/end lines, whether occupied or empty. An ADA stall is counted separately and must not also be counted as a standard stall. Count painted directional traffic arrows only when the arrow shape is visible. Do not count vehicles, curbs, crosswalk bars, parking-lot islands, lane lines, the yellow selection outline, buildings, UI controls, or inferred spaces hidden by trees/shadows/roofs.
+Work row by row, clockwise from the top-left of the selected pavement. Return one detection for every visible painted marking and put its center at normalized image coordinates x/y from 0 to 1. A standard stall is one non-ADA parking space defined by its visible separator/end lines, whether occupied or empty. An ADA stall is counted separately and must not also be counted as a standard stall. Count painted directional traffic arrows only when the arrow shape is visible. Do not count vehicles, curbs, crosswalk bars, parking-lot islands, lane lines, the yellow selection outline, buildings, UI controls, or inferred spaces hidden by trees/shadows/roofs.
 
 Every count shown to the user will be derived from your detection list, so include exactly one localized detection per marking. If a marking is blocked or ambiguous, omit it and describe the blocked zone in warnings instead of guessing. Keep the summary short and state what was visibly counted.`,
             },
@@ -141,7 +142,7 @@ Every count shown to the user will be derived from your detection list, so inclu
       detections,
     });
   } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") return json({ error: "The AI lot scan timed out. Try a tighter lot outline." }, 504);
+    if (error instanceof Error && error.name === "AbortError") return json({ error: "The AI lot scan exceeded 105 seconds. Retry once or use a tighter lot outline." }, 504);
     return json({ error: "The AI lot scan could not be completed." }, 502);
   } finally {
     clearTimeout(timeout);

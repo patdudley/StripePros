@@ -473,7 +473,7 @@ export function CredibleTakeoffWorkspace() {
 
       const image = await toJpeg(mapElement, {
         cacheBust: true,
-        pixelRatio: 2,
+        pixelRatio: 1.5,
         quality: .94,
         backgroundColor: "#11110f",
         filter: (node) => !(node instanceof HTMLElement && node.classList.contains("leaflet-control-attribution")),

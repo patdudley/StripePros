@@ -18,4 +18,10 @@ describe("AI lot scan route", () => {
   it("does not guess markings hidden by blocked zones", () => {
     expect(routeSource).toContain("omit it and describe the blocked zone");
   });
+
+  it("allows enough time for a dense original-resolution count", () => {
+    expect(routeSource).toContain("105_000");
+    expect(routeSource).toContain('reasoning: { effort: "medium" }');
+    expect(routeSource).toContain("max_output_tokens: 8_000");
+  });
 });

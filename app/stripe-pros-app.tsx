@@ -129,7 +129,6 @@ function ProductDemo({ aiScanningEnabled }: { aiScanningEnabled: boolean }) {
   const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
   const [suggesting, setSuggesting] = useState(false);
   const [activeSuggestion, setActiveSuggestion] = useState(-1);
-  const [imageryDetail, setImageryDetail] = useState("ESRI WORLD IMAGERY · NATIVE Z19");
   const [boundaryEditing, setBoundaryEditing] = useState(false);
   const [selectingLot, setSelectingLot] = useState(false);
   const [lotArea, setLotArea] = useState(0);
@@ -296,28 +295,12 @@ function ProductDemo({ aiScanningEnabled }: { aiScanningEnabled: boolean }) {
         const loaded = await activateTileLayer(map, nextLayer, demoTileLayerRef.current);
         if (!loaded) {
           demoScanZoomRef.current = 19;
-          setImageryDetail(`${config.provider.toUpperCase()} UNAVAILABLE · ESRI FALLBACK`);
           return;
         }
         demoTileLayerRef.current = nextLayer;
         demoImagerySignatureRef.current = signature;
       }
       demoScanZoomRef.current = config.maxZoom;
-      if (config.provider === "google") {
-        setImageryDetail(`GOOGLE SATELLITE · DISPLAY Z${config.maxZoom} · NATIVE ${config.nativeMaxZoom ?? "UNREPORTED"}`);
-      } else if (config.provider === "mapbox") {
-        setImageryDetail(`MAPBOX SATELLITE · DISPLAY Z${config.maxZoom} · NATIVE ${config.nativeMaxZoom ?? "UNREPORTED"}`);
-      } else if (config.provider === "nearmap") {
-        const captured = config.captureDate ? ` · ${new Date(`${config.captureDate}T12:00:00`).toLocaleDateString("en-US", { month: "short", year: "numeric" }).toUpperCase()}` : "";
-        const resolution = config.resolutionCm ? ` · ${config.resolutionCm} CM/PIXEL` : "";
-        setImageryDetail(`NEARMAP${captured}${resolution}`);
-      } else if (config.coverageStatus === "unavailable") {
-        setImageryDetail("NO NEARMAP COVERAGE · ESRI FALLBACK");
-      } else if (config.coverageStatus === "error") {
-        setImageryDetail("IMAGERY PROVIDER ERROR · ESRI FALLBACK");
-      } else {
-        setImageryDetail(`ESRI WORLD IMAGERY · NATIVE Z${config.nativeMaxZoom ?? 19}`);
-      }
     } catch { /* retain the current imagery layer */ }
   }
 
@@ -533,7 +516,7 @@ function ProductDemo({ aiScanningEnabled }: { aiScanningEnabled: boolean }) {
             {phase === "selecting" && <div className="lot-selection-guide"><strong>DRAW THE LOT BOUNDARY</strong><span>Click each corner around the parking area, then click the first point again to finish.</span></div>}
             {phase === "paused" && <div className="scanning-suspended-notice" role="status"><strong>AUTOMATED COUNTING IS PAUSED</strong><span>We are licensing imagery approved for machine analysis. Your lot boundary is ready for a manual takeoff.</span><a href="/workspace">OPEN MANUAL WORKSPACE →</a></div>}
             {phase === "scanning" && <><div className="scan-line"><span>{scanStageLabel}</span></div><div className="scan-progress-panel" role="status" aria-live="polite"><i>{scanProgress}%</i><div><strong>ANALYZING PARKING MARKINGS</strong><span><b style={{ width: `${scanProgress}%` }} /></span><small>ESTIMATED PROGRESS · VERIFY RESULTS WHEN COMPLETE</small></div></div></>}
-            {(phase === "selecting" || phase === "paused" || phase === "scanning" || phase === "quote") && <div className="scan-hud"><span><i /> {imageryDetail}</span><strong>{phase === "selecting" ? "MANUAL LOT SELECTION" : phase === "paused" ? "MANUAL TAKEOFF AVAILABLE" : phase === "scanning" ? scanStageLabel : scanError ? "SCAN NEEDS MANUAL REVIEW" : "AI COUNT COMPLETE — REVIEW BELOW"}</strong></div>}
+            {(phase === "selecting" || phase === "paused" || phase === "scanning" || phase === "quote") && <div className="scan-hud"><strong>{phase === "selecting" ? "MANUAL LOT SELECTION" : phase === "paused" ? "MANUAL TAKEOFF AVAILABLE" : phase === "scanning" ? scanStageLabel : scanError ? "SCAN NEEDS MANUAL REVIEW" : "AI COUNT COMPLETE — REVIEW BELOW"}</strong></div>}
             {phase === "quote" && <div className="sample-detection-overlay"><b>{scanError ? "SCAN COULD NOT VERIFY MARKINGS" : `${mockQuote.stalls + mockQuote.ada + mockQuote.accessAisles + mockQuote.arrows + mockQuote.speedBumps + mockQuote.stopBars} MARKINGS COUNTED${scanConfidence === null ? "" : ` · ${Math.round(scanConfidence * 100)}% CONFIDENCE`}`}</b><small>{scanError || scanWarnings[0] || "Review the totals and correct anything hidden or missed"}</small></div>}
             {phase === "quote" && <>
               <button className="edit-demo-boundary" onClick={toggleDemoBoundary}>{boundaryEditing ? "SAVE LOT OUTLINE" : "EDIT LOT OUTLINE"}</button>

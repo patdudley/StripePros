@@ -38,6 +38,13 @@ describe("AI lot scan route", () => {
     expect(routeSource).toContain("const stopBars = detections.filter");
   });
 
+  it("counts channelizing lane guide lines separately from arrows and access aisles", () => {
+    expect(routeSource).toContain('"lane_line"');
+    expect(routeSource).toContain('item.type === "lane_line"');
+    expect(routeSource).toContain("LANE LINE SWEEP");
+    expect(routeSource).toContain("const laneLines = detections.filter");
+  });
+
   it("detects speed bumps as localized scope instead of inferring them", () => {
     expect(routeSource).toContain('item.type === "speed_bump"');
     expect(routeSource).toContain("do not confuse stop bars, crosswalks, shadows, or pavement seams with speed bumps");

@@ -1,7 +1,7 @@
 import { json } from "@/lib/api";
 import { isAiScanningEnabled, SCANNING_SUSPENDED_MESSAGE } from "@/lib/ai-scanning";
 
-type DetectionType = "stall" | "ada" | "arrow" | "access_aisle" | "speed_bump" | "stop_bar";
+type DetectionType = "stall" | "ada" | "arrow" | "access_aisle" | "speed_bump" | "stop_bar" | "lane_line";
 type Visibility = "visible" | "partially_supported" | "unknown";
 type NormalizedCorner = { x: number; y: number };
 type LocatedCorner = { lat: number; lng: number };
@@ -109,7 +109,7 @@ function normalizeDetection(value: unknown, sectionIds: Set<string>): ModelDetec
   if (!value || typeof value !== "object") return null;
   const detection = value as Record<string, unknown>;
   if (!sectionIds.has(String(detection.sectionId))) return null;
-  if (detection.type !== "stall" && detection.type !== "ada" && detection.type !== "arrow" && detection.type !== "access_aisle" && detection.type !== "speed_bump" && detection.type !== "stop_bar") return null;
+  if (detection.type !== "stall" && detection.type !== "ada" && detection.type !== "arrow" && detection.type !== "access_aisle" && detection.type !== "speed_bump" && detection.type !== "stop_bar" && detection.type !== "lane_line") return null;
   const x = Number(detection.x);
   const y = Number(detection.y);
   const confidence = Number(detection.confidence);
@@ -312,7 +312,7 @@ function scanSchema(sectionIds: string[]) {
             sectionId: { type: "string", enum: sectionIds },
             rowId: { type: "string" },
             slotIndex: { type: "integer", minimum: 0 },
-            type: { type: "string", enum: ["stall", "ada", "arrow", "access_aisle", "speed_bump", "stop_bar"] },
+            type: { type: "string", enum: ["stall", "ada", "arrow", "access_aisle", "speed_bump", "stop_bar", "lane_line"] },
             x: { type: "number", minimum: 0, maximum: 1 },
             y: { type: "number", minimum: 0, maximum: 1 },
             corners: {
@@ -363,9 +363,9 @@ Complete these sweeps in order before answering:
 1. ROW RECONSTRUCTION: identify each physical parking row, its dominant axis, angle, approximate stall width/depth, and both endpoints before counting any space.
 2. ORDERED SLOT LEDGER: walk each row from one endpoint to the other. Assign stable slotIndex values and exactly one ledger entry per physical space. Classify it as stall, ada, partially_supported via visibility, or unknown. A partial slot needs at least two independent evidence signals in evidence (for example both separator continuations, one separator plus curb rhythm, or vehicle alignment plus a matching row interval). At row terminals where divider rhythm or vehicle alignment continues to the curb, count the final slot as partially_supported with rowId boundary-edge- when one separator plus vehicle alignment OR curb rhythm is visible. Confidence below 0.50 must be visibility unknown and must not be returned as a counted detection; flag its row instead.
 3. ORIENTED GEOMETRY: return four tight corners for every detection, aligned to the actual painted space or marking. Corners must describe the physical rectangle, never a generic horizontal label. Reconcile overlapping crops geometrically: if two proposed rectangles cover the same physical space, return only the clearest one even when section rowIds differ. Adjacent slots remain separate.
-4. SYMBOL SWEEPS — ARROW SWEEP and PATH SWEEP: traverse every drive aisle for arrows, then independently inspect ADA paint, access aisles/paths, speed bumps, and solid stop bars.
+4. SYMBOL SWEEPS — ARROW SWEEP, LANE LINE SWEEP, and PATH SWEEP: traverse every drive aisle for arrows and channelizing guide stripes, then independently inspect ADA paint, access aisles/paths, speed bumps, and solid stop bars.
 
-Apply the strict ADA rule: classify a stall as ada only when visible blue paint belongs to that stall or a legible wheelchair symbol is visible. A path can exist without an ADA stall. Do not classify an ADA stall solely because an access aisle is nearby. Count access_aisle independently. Count stop_bar once for every clearly visible solid transverse painted stop line. Count speed bumps separately and do not confuse stop bars, crosswalks, shadows, or pavement seams with speed bumps. If a row is genuinely obscured, add one precise occludedRows entry instead of inventing or silently omitting spaces. Do not silently omit an uncertain or boundary-truncated row. Inspect immediately outside the polygon for truncated rows and use a boundary-edge- rowId when expansion is needed. Never estimate from lot area. Do not echo first-pass duplicates.
+Apply the strict ADA rule: classify a stall as ada only when visible blue paint belongs to that stall or a legible wheelchair symbol is visible. A path can exist without an ADA stall. Do not classify an ADA stall solely because an access aisle is nearby. Count access_aisle independently. Count lane_line once for every visible longitudinal channelizing stripe that guides traffic through a drive aisle, drive-through lane, or fire lane — including curved paired guide lines beside arrows. Each continuous painted guide stripe is one lane_line; parallel stripes in the same channel count separately. Do not classify stall dividers, access_aisle hatching, or transverse stop_bar lines as lane_line. Count stop_bar once for every clearly visible solid transverse painted stop line. Count speed bumps separately and do not confuse stop bars, crosswalks, shadows, or pavement seams with speed bumps. If a row is genuinely obscured, add one precise occludedRows entry instead of inventing or silently omitting spaces. Do not silently omit an uncertain or boundary-truncated row. Inspect immediately outside the polygon for truncated rows and use a boundary-edge- rowId when expansion is needed. Never estimate from lot area. Do not echo first-pass duplicates.
 
 FIRST PASS SUGGESTIONS:
 ${JSON.stringify(verificationSource).slice(0, 45_000)}
@@ -379,7 +379,7 @@ TERMINAL SLOTS: Do not drop the last stall in a row just because it sits near th
 
 Visibility rules: visible means the physical slot is directly supported. partially_supported requires at least two independent evidence signals listed in evidence, such as both separator continuations, one separator plus curb rhythm, or vehicle alignment plus matching row intervals — except terminal boundary-edge- slots may use one separator plus vehicle alignment or curb rhythm. Confidence below 0.50 is unknown: omit the detection and add its row to occludedRows. Never infer a count from lot length or area. Treat rowIds as local labels only; overlap with adjacent crops is expected and will be reconciled geometrically.
 
-ADA is strict: use ada only when blue paint belonging to that stall or a legible wheelchair symbol is visible. A path/access aisle never proves the adjacent stall is ADA. Count access_aisle independently. Traverse every drive aisle end-to-end for every painted arrow. Count solid transverse stop_bar markings and true speed bumps separately. If trees, shadows, roofs, canopies, UI, or image edges prevent two-signal support, flag the precise row for manual confirmation. Inspect immediately outside the polygon for truncated rows and use a boundary-edge- rowId when expansion is required.`;
+ADA is strict: use ada only when blue paint belonging to that stall or a legible wheelchair symbol is visible. A path/access aisle never proves the adjacent stall is ADA. Count access_aisle independently. Traverse every drive aisle end-to-end for every painted arrow and every visible lane_line channelizing stripe, including curved drive-through guide lines that may sit beside an arrow. Count solid transverse stop_bar markings and true speed bumps separately. Do not skip thin longitudinal guide stripes just because an adjacent arrow was already counted. If trees, shadows, roofs, canopies, UI, or image edges prevent two-signal support, flag the precise row for manual confirmation. Inspect immediately outside the polygon for truncated rows and use a boundary-edge- rowId when expansion is required.`;
   const learnedContext = correctionExamples.length
     ? `\n\nRECENT FOUNDER CORRECTIONS (use as behavioral examples, never as counts for this lot):\n${JSON.stringify(correctionExamples).slice(0, 12_000)}`
     : "";
@@ -484,9 +484,10 @@ export async function POST(request: Request) {
     const accessAisles = detections.filter((item) => item.type === "access_aisle").length;
     const speedBumps = detections.filter((item) => item.type === "speed_bump").length;
     const stopBars = detections.filter((item) => item.type === "stop_bar").length;
+    const laneLines = detections.filter((item) => item.type === "lane_line").length;
     const partiallySupported = detections.filter((item) => item.visibility === "partially_supported").length;
     const boundaryIncomplete = occludedRows.some((row) => row.rowId.startsWith("boundary-edge-") || /(?:boundary|polygon|outline).*(?:cuts|excludes|truncates|expand)/i.test(row.reason));
-    console.info("lot-scan:complete", { durationMs: Date.now() - scanStartedAt, sections: sections.length, stalls, ada, arrows, accessAisles, speedBumps, stopBars, occludedRows: occludedRows.length });
+    console.info("lot-scan:complete", { durationMs: Date.now() - scanStartedAt, sections: sections.length, stalls, ada, arrows, accessAisles, speedBumps, stopBars, laneLines, occludedRows: occludedRows.length });
     return json({
       stalls,
       ada,
@@ -494,6 +495,7 @@ export async function POST(request: Request) {
       accessAisles,
       speedBumps,
       stopBars,
+      laneLines,
       confidence: Number.isFinite(confidence) ? Math.max(0, Math.min(1, confidence)) : 0,
       summary: typeof verified.summary === "string" ? verified.summary.slice(0, 300) : "Overlapping sections scanned and verified.",
       warnings,

@@ -16,7 +16,7 @@ describe("homepage lot counting", () => {
     expect(homepageSource).toContain('api<LotScanResult>("/api/scan-lot"');
     expect(homepageSource).toContain("if (aiScanningEnabled)");
     expect(homepageSource).toContain("AUTOMATED COUNTING IS PAUSED");
-    expect(homepageSource).toContain("setDetectedCounts({ stalls: result.stalls, ada: result.ada, arrows: result.arrows, accessAisles: result.accessAisles, speedBumps: result.speedBumps, stopBars: result.stopBars })");
+    expect(homepageSource).toContain("setDetectedCounts({ stalls: result.stalls, ada: result.ada, arrows: result.arrows, accessAisles: result.accessAisles, speedBumps: result.speedBumps, stopBars: result.stopBars, laneLines: result.laneLines })");
   });
 
   it("keeps every detected category manually correctable", () => {
@@ -28,6 +28,7 @@ describe("homepage lot counting", () => {
     expect(homepageSource).toContain('adjustDetectedCount("arrows", -1)');
     expect(homepageSource).toContain('adjustDetectedCount("speedBumps", -1)');
     expect(homepageSource).toContain('adjustDetectedCount("stopBars", -1)');
+    expect(homepageSource).toContain('adjustDetectedCount("laneLines", -1)');
   });
 
   it("offers a real retry when the model times out", () => {

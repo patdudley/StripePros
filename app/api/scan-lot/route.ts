@@ -46,17 +46,40 @@ async function loadCorrectionExamples() {
 function extractOutputText(payload: unknown) {
   if (!payload || typeof payload !== "object") return "";
   const response = payload as { output_text?: unknown; output?: unknown };
-  if (typeof response.output_text === "string") return response.output_text;
+  if (typeof response.output_text === "string" && response.output_text.trim()) return response.output_text;
   if (!Array.isArray(response.output)) return "";
+  const parts: string[] = [];
   for (const item of response.output) {
     if (!item || typeof item !== "object") continue;
     const content = (item as { content?: unknown }).content;
     if (!Array.isArray(content)) continue;
     for (const part of content) {
-      if (part && typeof part === "object" && typeof (part as { text?: unknown }).text === "string") return (part as { text: string }).text;
+      if (part && typeof part === "object" && typeof (part as { text?: unknown }).text === "string") {
+        parts.push((part as { text: string }).text);
+      }
     }
   }
-  return "";
+  return parts.join("");
+}
+
+export function parseScanPayload(payload: unknown): ScanPayload {
+  const response = payload as {
+    status?: string;
+    incomplete_details?: { reason?: string };
+  };
+  if (response.status === "incomplete" && response.incomplete_details?.reason === "max_output_tokens") {
+    throw new Error("The AI scan hit its output limit before finishing. Retry the scan or tighten the lot boundary.");
+  }
+  const outputText = extractOutputText(payload);
+  if (!outputText.trim()) throw new Error("The AI scan returned no usable result.");
+  try {
+    return JSON.parse(outputText) as ScanPayload;
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      throw new Error("The AI scan response was truncated before it could be parsed. Retry the scan.");
+    }
+    throw error;
+  }
 }
 
 function normalizedPoint(value: unknown) {
@@ -362,7 +385,7 @@ ADA is strict: use ada only when blue paint belonging to that stall or a legible
     body: JSON.stringify({
       model: "gpt-5.6",
       reasoning: { effort: "low" },
-      max_output_tokens: 5_000,
+      max_output_tokens: verificationSource ? 16_000 : 12_000,
       input: [{ role: "user", content }],
       text: { format: { type: "json_schema", name: verificationSource ? "parking_lot_verification" : "parking_lot_section_scan", strict: true, schema: scanSchema(sections.map((section) => section.id)) } },
     }),
@@ -371,9 +394,7 @@ ADA is strict: use ada only when blue paint belonging to that stall or a legible
     const error = await response.json().catch(() => null) as { error?: { message?: string } } | null;
     throw new Error(error?.error?.message?.slice(0, 180) || "AI lot scanning is temporarily unavailable.");
   }
-  const outputText = extractOutputText(await response.json() as unknown);
-  if (!outputText) throw new Error("The AI scan returned no usable result.");
-  return JSON.parse(outputText) as ScanPayload;
+  return parseScanPayload(await response.json() as unknown);
 }
 
 export async function POST(request: Request) {

@@ -1,6 +1,7 @@
 "use client";
 
 import type { LatLng, Map as LeafletMap } from "leaflet";
+import { expandLatLngRing, SCAN_BOUNDARY_BUFFER_METERS } from "@/lib/scan-boundary";
 
 export type ScanViewport = { north: number; south: number; east: number; west: number };
 export type ScanSection = {
@@ -54,7 +55,7 @@ function splitBounds(boundary: LatLng[]) {
   return Array.from({ length: sectionCount }, (_, index): ScanViewport => {
     const sectionStart = Math.min(end - sectionSpan, start + index * step);
     const sectionEnd = sectionStart + sectionSpan;
-    const crossPadding = (vertical ? east - west : north - south) * 0.08;
+    const crossPadding = (vertical ? east - west : north - south) * 0.12;
     return vertical
       ? { north: sectionEnd, south: sectionStart, east: east + crossPadding, west: west - crossPadding }
       : { north: north + crossPadding, south: south - crossPadding, east: sectionEnd, west: sectionStart };
@@ -85,17 +86,18 @@ export async function captureLotScanSections({
   const { toJpeg } = await import("html-to-image");
   const wholeBounds = map.getBounds();
   const sections: ScanSection[] = [];
-  const targets = splitBounds(boundary);
+  const scanBoundary = expandLatLngRing(boundary, SCAN_BOUNDARY_BUFFER_METERS);
+  const targets = splitBounds(scanBoundary);
   mapElement.classList.add("clean-scan-capture");
   try {
     for (let index = 0; index < targets.length; index += 1) {
       if (signal?.aborted) throw new DOMException("Scan cancelled", "AbortError");
       const target = targets[index];
-      map.fitBounds([[target.south, target.west], [target.north, target.east]], { padding: [18, 18], maxZoom, animate: false });
+      map.fitBounds([[target.south, target.west], [target.north, target.east]], { padding: [28, 28], maxZoom, animate: false });
       await settleMap(map);
       const width = mapElement.clientWidth;
       const height = mapElement.clientHeight;
-      const projectedBoundary = boundary.map((latLng) => {
+      const projectedBoundary = scanBoundary.map((latLng) => {
         const point = map.latLngToContainerPoint(latLng);
         return { x: point.x / width, y: point.y / height };
       });

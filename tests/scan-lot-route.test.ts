@@ -17,6 +17,8 @@ describe("AI lot scan route", () => {
 
   it("does not guess markings hidden by blocked zones", () => {
     expect(routeSource).toContain("occludedRows");
+    expect(routeSource).toContain("TERMINAL SLOTS");
+    expect(routeSource).toContain("boundary-edge-");
     expect(routeSource).toContain("Do not silently omit an uncertain or boundary-truncated row");
     expect(routeSource).toContain("boundary-edge-");
     expect(routeSource).toContain("boundaryIncomplete");

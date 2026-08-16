@@ -143,6 +143,14 @@ function normalizeOccludedRow(value: unknown, sectionIds: Set<string>): Occluded
   };
 }
 
+function detectionCountsTowardQuote(detection: ModelDetection) {
+  if (detection.visibility === "unknown") return false;
+  if (detection.confidence >= 0.5) return true;
+  return detection.visibility === "partially_supported"
+    && detection.confidence >= 0.45
+    && detection.rowId.toLowerCase().startsWith("boundary-edge-");
+}
+
 function locateDetection(detection: ModelDetection, section: ScanSection): LocatedDetection {
   const locate = (point: NormalizedCorner): LocatedCorner => ({
     lat: section.viewport.north - point.y * (section.viewport.north - section.viewport.south),
@@ -353,7 +361,7 @@ async function runVisionPass(apiKey: string, address: string, sections: ScanSect
 
 Complete these sweeps in order before answering:
 1. ROW RECONSTRUCTION: identify each physical parking row, its dominant axis, angle, approximate stall width/depth, and both endpoints before counting any space.
-2. ORDERED SLOT LEDGER: walk each row from one endpoint to the other. Assign stable slotIndex values and exactly one ledger entry per physical space. Classify it as stall, ada, partially_supported via visibility, or unknown. A partial slot needs at least two independent evidence signals in evidence (for example both separator continuations, one separator plus curb rhythm, or vehicle alignment plus a matching row interval). Confidence below 0.50 must be visibility unknown and must not be returned as a counted detection; flag its row instead.
+2. ORDERED SLOT LEDGER: walk each row from one endpoint to the other. Assign stable slotIndex values and exactly one ledger entry per physical space. Classify it as stall, ada, partially_supported via visibility, or unknown. A partial slot needs at least two independent evidence signals in evidence (for example both separator continuations, one separator plus curb rhythm, or vehicle alignment plus a matching row interval). At row terminals where divider rhythm or vehicle alignment continues to the curb, count the final slot as partially_supported with rowId boundary-edge- when one separator plus vehicle alignment OR curb rhythm is visible. Confidence below 0.50 must be visibility unknown and must not be returned as a counted detection; flag its row instead.
 3. ORIENTED GEOMETRY: return four tight corners for every detection, aligned to the actual painted space or marking. Corners must describe the physical rectangle, never a generic horizontal label. Reconcile overlapping crops geometrically: if two proposed rectangles cover the same physical space, return only the clearest one even when section rowIds differ. Adjacent slots remain separate.
 4. SYMBOL SWEEPS — ARROW SWEEP and PATH SWEEP: traverse every drive aisle for arrows, then independently inspect ADA paint, access aisles/paths, speed bumps, and solid stop bars.
 
@@ -363,11 +371,13 @@ FIRST PASS SUGGESTIONS:
 ${JSON.stringify(verificationSource).slice(0, 45_000)}
 SECTION BOUNDARIES:
 ${JSON.stringify(sectionGuide)}`
-    : `Review this single focused high-resolution aerial section for ${address}. Count only pixels inside ${JSON.stringify(sectionGuide)}.
+    : `Review this single focused high-resolution aerial section for ${address}. Count only pixels inside ${JSON.stringify(sectionGuide)}. The boundary is expanded ~6 meters beyond the user's outline so terminal row slots remain countable.
 
 Use a row-first procedure. Before outputting detections, reconstruct each parking row's dominant axis, angle, endpoints, and approximate stall width/depth. Then walk the row in order and build a slot ledger. Return exactly one detection per physical space, with a stable rowId and slotIndex. Never mark the entrance, vehicle center, and back line as separate stalls. For stall and ADA detections, corners must be the four oriented corners of the actual parking rectangle. For other markings, corners must tightly bound the painted marking. Do not return generic horizontal boxes.
 
-Visibility rules: visible means the physical slot is directly supported. partially_supported requires at least two independent evidence signals listed in evidence, such as both separator continuations, one separator plus curb rhythm, or vehicle alignment plus matching row intervals. Confidence below 0.50 is unknown: omit the detection and add its row to occludedRows. Never infer a count from lot length or area. Treat rowIds as local labels only; overlap with adjacent crops is expected and will be reconciled geometrically.
+TERMINAL SLOTS: Do not drop the last stall in a row just because it sits near the boundary edge. When divider lines or occupied vehicles continue with the same spacing, count the terminal slot. Use rowId prefix boundary-edge- and visibility partially_supported when only one separator plus vehicle alignment or curb rhythm supports the slot.
+
+Visibility rules: visible means the physical slot is directly supported. partially_supported requires at least two independent evidence signals listed in evidence, such as both separator continuations, one separator plus curb rhythm, or vehicle alignment plus matching row intervals — except terminal boundary-edge- slots may use one separator plus vehicle alignment or curb rhythm. Confidence below 0.50 is unknown: omit the detection and add its row to occludedRows. Never infer a count from lot length or area. Treat rowIds as local labels only; overlap with adjacent crops is expected and will be reconciled geometrically.
 
 ADA is strict: use ada only when blue paint belonging to that stall or a legible wheelchair symbol is visible. A path/access aisle never proves the adjacent stall is ADA. Count access_aisle independently. Traverse every drive aisle end-to-end for every painted arrow. Count solid transverse stop_bar markings and true speed bumps separately. If trees, shadows, roofs, canopies, UI, or image edges prevent two-signal support, flag the precise row for manual confirmation. Inspect immediately outside the polygon for truncated rows and use a boundary-edge- rowId when expansion is required.`;
   const learnedContext = correctionExamples.length
@@ -455,7 +465,7 @@ export async function POST(request: Request) {
     const sectionIds = new Set(sections.map((section) => section.id));
     const normalized = Array.isArray(verified.detections) ? verified.detections
       .map((item) => normalizeDetection(item, sectionIds))
-      .filter((item): item is ModelDetection => Boolean(item) && item.visibility !== "unknown" && item.confidence >= .5) : [];
+      .filter((item): item is ModelDetection => Boolean(item) && detectionCountsTowardQuote(item)) : [];
     const located = normalized.flatMap((detection) => {
       const section = sections.find((candidate) => candidate.id === detection.sectionId);
       return section ? [locateDetection(detection, section)] : [];

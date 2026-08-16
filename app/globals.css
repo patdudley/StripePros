@@ -195,6 +195,7 @@ button { cursor: pointer; }
 .demo-count-arrow { border-radius: 50%; background: #62d77c; font-size: 14px; }
 .demo-count-speed_bump { width: 42px !important; background: #ff7a45; color: #11110f; font-size: 6px; }
 .demo-count-stop_bar { width: 42px !important; background: #ff6b4a; color: #11110f; font-size: 6px; }
+.demo-count-lane_line { width: 42px !important; background: #ffffff; color: #11110f; font-size: 6px; border-color: #11110f; }
 .quote-preview { background: #fbfaf6; padding: 24px 21px; opacity: .48; filter: grayscale(1); transition: opacity .5s ease, filter .5s ease, transform .5s ease; transform: translateX(5px); }
 .quote-preview.revealed { opacity: 1; filter: none; transform: translateX(0); }
 .quote-top { display: flex; justify-content: space-between; align-items: center; padding-bottom: 19px; border-bottom: 2px solid var(--ink); }

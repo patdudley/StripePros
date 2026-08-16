@@ -9,11 +9,17 @@ describe("automated imagery analysis compliance shutoff", () => {
     vi.restoreAllMocks();
   });
 
-  it("defaults to disabled", () => {
+  it("defaults to enabled when OpenAI is configured", () => {
+    process.env.OPENAI_API_KEY = "sk-test";
+    expect(isAiScanningEnabled()).toBe(true);
+  });
+
+  it("defaults to disabled without OpenAI configured", () => {
     expect(isAiScanningEnabled()).toBe(false);
   });
 
   it("returns a structured suspension response before parsing or calling any provider", async () => {
+    process.env.AI_SCANNING_ENABLED = "false";
     process.env.OPENAI_API_KEY = "must-not-be-used";
     const modelOrProviderFetch = vi.spyOn(globalThis, "fetch");
 

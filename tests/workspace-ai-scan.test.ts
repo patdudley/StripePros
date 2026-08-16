@@ -9,6 +9,8 @@ describe("live workspace AI scan", () => {
     expect(workspaceSource).toContain("window.setTimeout(() => void runAiScan(geometry)");
     expect(workspaceSource).toContain('fetch("/api/scan-lot"');
     expect(workspaceSource).toContain("Automated detection is paused pending an imagery license");
+    expect(workspaceSource).toContain("RETRY AI SCAN");
+    expect(workspaceSource).toContain("RE-SCAN LOT");
   });
 
   it("creates localized model annotations from every detection", () => {

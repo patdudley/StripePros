@@ -658,6 +658,7 @@ button { cursor: pointer; }
 .map-workflow-strip { position: absolute; z-index: 850; top: 13px; left: 13px; display: flex; box-shadow: 0 5px 18px rgba(0,0,0,.27); }
 .map-workflow-strip button { height: 38px; border: 0; border-right: 1px solid #d3cfc5; background: rgba(255,255,255,.96); color: var(--ink); padding: 0 10px; font: 900 7px Arial; letter-spacing: .07em; }
 .map-workflow-strip button.primary { background: var(--amber); }
+.map-workflow-strip button.retry-workspace-scan { border-right: 0; background: var(--ink); color: var(--amber); }
 .map-workflow-strip button:disabled { color: #aaa69d; cursor: not-allowed; }
 .map-history-tools { position: absolute; z-index: 850; top: 60px; right: 13px; display: flex; }
 .map-history-tools button { height: 30px; border: 1px solid rgba(255,255,255,.28); background: rgba(17,17,15,.9); color: #fff; padding: 0 9px; font: 800 7px Arial; }

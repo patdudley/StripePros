@@ -178,6 +178,11 @@ button { cursor: pointer; }
 .lot-selection-guide strong { color: var(--amber); font: 900 8px monospace; letter-spacing: .12em; }
 .lot-selection-guide span { font-size: 9px; line-height: 1.4; }
 .edit-demo-boundary { position: absolute; z-index: 10; right: 18px; bottom: 84px; border: 1px solid var(--amber); background: rgba(17,17,15,.94); color: var(--amber); padding: 10px 12px; font: 900 7px monospace; letter-spacing: .11em; }
+.add-demo-spot { position: absolute; z-index: 10; right: 18px; bottom: 128px; border: 1px solid var(--amber); background: var(--amber); color: var(--ink); padding: 10px 12px; font: 900 7px monospace; letter-spacing: .11em; }
+.add-demo-ada { position: absolute; z-index: 10; right: 18px; bottom: 172px; border: 1px solid #2f8cff; background: rgba(17,17,15,.94); color: #8ec5ff; padding: 10px 12px; font: 900 7px monospace; letter-spacing: .11em; }
+.demo-edit-hint { position: absolute; z-index: 10; left: 19px; top: 72px; margin: 0; padding: 6px 10px; background: rgba(17,17,15,.88); border: 1px solid #494943; color: #d6d1c4; font: 700 7px monospace; letter-spacing: .06em; pointer-events: none; }
+.demo-count-draggable { cursor: grab !important; }
+.demo-count-draggable:active { cursor: grabbing !important; }
 .lot-canvas.editing .edit-demo-boundary { background: var(--amber); color: var(--ink); }
 .map-summary { position: absolute; z-index: 9; left: 19px; bottom: 18px; display: flex; background: rgba(17,17,15,.91); border: 1px solid #494943; }
 .map-summary div { min-width: 76px; padding: 10px 12px; border-right: 1px solid #494943; display: flex; flex-direction: column; gap: 3px; }
@@ -894,6 +899,9 @@ button { cursor: pointer; }
   .map-summary.editable div { min-width: 72px; padding: 8px 6px; }
   .map-summary.editable b { gap: 3px; }
   .edit-demo-boundary { right: 10px; bottom: 94px; }
+  .add-demo-spot { right: 10px; bottom: 138px; }
+  .add-demo-ada { right: 10px; bottom: 182px; }
+  .demo-edit-hint { left: 10px; top: 64px; }
   .sample-detection-overlay { display: none; }
   .quote-preview { padding: 21px 16px; }
   .workflow-section { width: calc(100% - 30px); }

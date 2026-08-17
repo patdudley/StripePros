@@ -27,9 +27,69 @@ type DemoBoundary = LeafletPolygon & {
 };
 type DemoGeomanMap = LeafletMap & { pm: { enableDraw(shape: "Polygon", options?: Record<string, unknown>): void; disableDraw(): void } };
 type DemoMarkingType = "stall" | "ada" | "arrow" | "access_aisle" | "speed_bump" | "stop_bar" | "lane_line" | "crosswalk";
-type DemoMarking = { id: string; type: DemoMarkingType; lat: number; lng: number; geometry: TakeoffGeometry; visibility: "visible" | "partially_supported" };
+type DemoMarking = {
+  id: string;
+  type: DemoMarkingType;
+  lat: number;
+  lng: number;
+  geometry: TakeoffGeometry;
+  visibility: "visible" | "partially_supported";
+  source?: "scan" | "manual";
+};
 type DemoCounts = { stalls: number; ada: number; arrows: number; accessAisles: number; speedBumps: number; stopBars: number; laneLines: number; crosswalks: number };
 const EMPTY_DEMO_COUNTS: DemoCounts = { stalls: 0, ada: 0, arrows: 0, accessAisles: 0, speedBumps: 0, stopBars: 0, laneLines: 0, crosswalks: 0 };
+
+const MARKING_COUNT_KEY: Record<DemoMarkingType, keyof DemoCounts> = {
+  stall: "stalls",
+  ada: "ada",
+  arrow: "arrows",
+  access_aisle: "accessAisles",
+  speed_bump: "speedBumps",
+  stop_bar: "stopBars",
+  lane_line: "laneLines",
+  crosswalk: "crosswalks",
+};
+
+function markingLabel(type: DemoMarkingType) {
+  if (type === "ada") return "ADA";
+  if (type === "arrow") return "↑";
+  if (type === "access_aisle") return "PATH";
+  if (type === "speed_bump") return "BUMP";
+  if (type === "stop_bar") return "STOP";
+  if (type === "lane_line") return "LANE";
+  if (type === "crosswalk") return "WALK";
+  return "S";
+}
+
+/** Translate a geometry so its reference point moves from one lat/lng to another. */
+function translateGeometry(geometry: TakeoffGeometry, fromLat: number, fromLng: number, toLat: number, toLng: number): TakeoffGeometry {
+  const dLat = toLat - fromLat;
+  const dLng = toLng - fromLng;
+  if (geometry.type === "Point") return { type: "Point", coordinates: [toLng, toLat] };
+  if (geometry.type === "LineString") {
+    return { type: "LineString", coordinates: geometry.coordinates.map(([lng, lat]) => [lng + dLng, lat + dLat] as [number, number]) };
+  }
+  return {
+    type: "Polygon",
+    coordinates: geometry.coordinates.map((ring) => ring.map(([lng, lat]) => [lng + dLng, lat + dLat] as [number, number])),
+  };
+}
+
+/** Rough 9×18 ft stall box centered on a lat/lng for newly added spots. */
+function stallPolygonAt(lat: number, lng: number): TakeoffGeometry {
+  const halfWidth = 4.5 / (364_000 * Math.cos(lat * Math.PI / 180));
+  const halfDepth = 9 / 364_000;
+  return {
+    type: "Polygon",
+    coordinates: [[
+      [lng - halfWidth, lat - halfDepth],
+      [lng + halfWidth, lat - halfDepth],
+      [lng + halfWidth, lat + halfDepth],
+      [lng - halfWidth, lat + halfDepth],
+      [lng - halfWidth, lat - halfDepth],
+    ]],
+  };
+}
 type LotScanResult = DemoCounts & {
   scanId: string;
   confidence: number;
@@ -165,9 +225,9 @@ function ProductDemo({ aiScanningEnabled }: { aiScanningEnabled: boolean }) {
         demoBoundaryRef.current = boundary;
         updateDemoBoundary(boundary);
         (map as DemoGeomanMap).pm.disableDraw();
-        map.dragging.disable();
-        map.scrollWheelZoom.disable();
-        map.touchZoom.disable();
+        map?.dragging.disable();
+        map?.scrollWheelZoom.disable();
+        map?.touchZoom.disable();
         setSelectingLot(false);
         if (aiScanningEnabled) {
           setScanStage(0);
@@ -176,7 +236,7 @@ function ProductDemo({ aiScanningEnabled }: { aiScanningEnabled: boolean }) {
         } else {
           setPhase("paused");
         }
-        map.fitBounds(boundary.getBounds(), { padding: [68, 68], maxZoom: Math.min(demoScanZoomRef.current, LOT_REVIEW_ZOOM), animate: true, duration: .45 });
+        map?.fitBounds(boundary.getBounds(), { padding: [68, 68], maxZoom: Math.min(demoScanZoomRef.current, LOT_REVIEW_ZOOM), animate: true, duration: .45 });
       });
       await configureDemoImagery();
     })();
@@ -190,29 +250,51 @@ function ProductDemo({ aiScanningEnabled }: { aiScanningEnabled: boolean }) {
     demoMarkingLayersRef.current.forEach((marker) => map.removeLayer(marker));
     demoMarkingLayersRef.current.clear();
     for (const marking of demoMarkings) {
-      const label = marking.type === "ada" ? "ADA" : marking.type === "arrow" ? "↑" : marking.type === "access_aisle" ? "PATH" : marking.type === "speed_bump" ? "BUMP" : marking.type === "stop_bar" ? "STOP" : marking.type === "lane_line" ? "LANE" : marking.type === "crosswalk" ? "WALK" : "S";
-      const layer = marking.geometry.type === "Polygon"
-        ? L.geoJSON({ type: "Feature", properties: {}, geometry: marking.geometry } as never, {
+      const label = markingLabel(marking.type);
+      const group = L.layerGroup().addTo(map);
+      if (marking.geometry.type === "Polygon" || marking.geometry.type === "LineString") {
+        L.geoJSON({ type: "Feature", properties: {}, geometry: marking.geometry } as never, {
           style: {
             color: marking.type === "ada" ? "#2f8cff" : marking.type === "access_aisle" ? "#58a6ff" : marking.type === "lane_line" || marking.type === "crosswalk" ? "#ffffff" : "#ffb400",
             fillColor: marking.type === "ada" ? "#2f8cff" : marking.type === "access_aisle" ? "#58a6ff" : marking.type === "lane_line" || marking.type === "crosswalk" ? "#ffffff" : "#ffb400",
             weight: marking.type === "stall" || marking.type === "ada" ? 1.5 : marking.type === "lane_line" ? 3 : 2,
             fillOpacity: marking.type === "stall" || marking.type === "ada" ? .12 : marking.type === "lane_line" ? .55 : .2,
             dashArray: marking.visibility === "partially_supported" ? "5 4" : undefined,
+            interactive: false,
           },
-        }).addTo(map)
-        : L.marker([marking.lat, marking.lng], {
-          bubblingMouseEvents: false,
-          icon: L.divIcon({ className: `demo-count-marker demo-count-${marking.type}`, html: label, iconSize: [15, 11], iconAnchor: [7, 5] }),
-        }).addTo(map);
-      if (marking.geometry.type === "Polygon") layer.bindTooltip(label, { permanent: true, direction: "center", className: `demo-count-marker demo-count-${marking.type}` });
-      layer.on("click", () => {
+        }).addTo(group);
+      }
+      const icon = L.marker([marking.lat, marking.lng], {
+        draggable: true,
+        autoPan: true,
+        bubblingMouseEvents: false,
+        icon: L.divIcon({ className: `demo-count-marker demo-count-${marking.type} demo-count-draggable`, html: label, iconSize: [18, 14], iconAnchor: [9, 7] }),
+      }).addTo(group);
+      let dragged = false;
+      icon.on("dragstart", () => { dragged = true; });
+      icon.on("dragend", () => {
+        const { lat, lng } = icon.getLatLng();
+        setDemoMarkings((current) => current.map((item) => {
+          if (item.id !== marking.id) return item;
+          return {
+            ...item,
+            lat,
+            lng,
+            geometry: translateGeometry(item.geometry, item.lat, item.lng, lat, lng),
+          };
+        }));
+        window.setTimeout(() => { dragged = false; }, 0);
+      });
+      icon.on("click", (event) => {
+        L.DomEvent.stopPropagation(event);
+        if (dragged) return;
         setDemoMarkings((current) => current.filter((item) => item.id !== marking.id));
-        const key = marking.type === "stall" ? "stalls" : marking.type === "ada" ? "ada" : marking.type === "arrow" ? "arrows" : marking.type === "speed_bump" ? "speedBumps" : marking.type === "stop_bar" ? "stopBars" : marking.type === "lane_line" ? "laneLines" : marking.type === "crosswalk" ? "crosswalks" : "accessAisles";
+        if (marking.source === "manual") return;
+        const key = MARKING_COUNT_KEY[marking.type];
         setDetectedCounts((current) => ({ ...current, [key]: Math.max(0, current[key] - 1) }));
       });
-      if (marking.geometry.type !== "Polygon") layer.bindTooltip(`Remove ${marking.type === "ada" ? "ADA stall" : marking.type === "access_aisle" ? "path / access aisle" : marking.type === "stop_bar" ? "solid stop line" : marking.type === "lane_line" ? "lane guide line" : marking.type === "crosswalk" ? "crosswalk" : marking.type}`, { direction: "top" });
-      demoMarkingLayersRef.current.set(marking.id, layer);
+      icon.bindTooltip(`Drag to move · click to remove ${marking.type === "ada" ? "ADA stall" : marking.type === "stall" ? "stall" : markingLabel(marking.type).toLowerCase()}`, { direction: "top" });
+      demoMarkingLayersRef.current.set(marking.id, group);
     }
   }, [demoMarkings]);
 
@@ -257,7 +339,7 @@ function ProductDemo({ aiScanningEnabled }: { aiScanningEnabled: boolean }) {
           ...result.warnings,
         ]);
         if (result.boundaryIncomplete) setScanError("The selected outline cuts off a visible parking row or drive aisle. Expand the flagged edge, then retry the scan.");
-        setDemoMarkings(result.detections.map((detection, index) => ({ id: `auto-${index}-${crypto.randomUUID()}`, type: detection.type, lat: detection.lat, lng: detection.lng, geometry: detection.geometry, visibility: detection.visibility })));
+        setDemoMarkings(result.detections.map((detection, index) => ({ id: `auto-${index}-${crypto.randomUUID()}`, type: detection.type, lat: detection.lat, lng: detection.lng, geometry: detection.geometry, visibility: detection.visibility, source: "scan" as const })));
         setScanProgress(100);
         await new Promise((resolve) => window.setTimeout(resolve, 350));
       } catch (caught) {
@@ -409,6 +491,26 @@ function ProductDemo({ aiScanningEnabled }: { aiScanningEnabled: boolean }) {
     setDetectedCounts((current) => ({ ...current, [key]: Math.max(0, current[key] + delta) }));
   }
 
+  function addDemoSpot(type: "stall" | "ada" = "stall") {
+    const map = demoMapRef.current;
+    if (!map || phase !== "quote") return;
+    const center = map.getCenter();
+    const lat = center.lat;
+    const lng = center.lng;
+    setDemoMarkings((current) => [
+      ...current,
+      {
+        id: `manual-${crypto.randomUUID()}`,
+        type,
+        lat,
+        lng,
+        geometry: stallPolygonAt(lat, lng),
+        visibility: "visible",
+        source: "manual",
+      },
+    ]);
+  }
+
   function retryDemoScan() {
     if (!aiScanningEnabled || !selectedSite || !demoBoundaryRef.current) return;
     setDetectedCounts(EMPTY_DEMO_COUNTS);
@@ -522,7 +624,10 @@ function ProductDemo({ aiScanningEnabled }: { aiScanningEnabled: boolean }) {
             {phase === "quote" && <div className="sample-detection-overlay"><b>{scanError ? "SCAN COULD NOT VERIFY MARKINGS" : `${mockQuote.stalls + mockQuote.ada + mockQuote.accessAisles + mockQuote.arrows + mockQuote.speedBumps + mockQuote.stopBars + mockQuote.laneLines + mockQuote.crosswalks} MARKINGS COUNTED${scanConfidence === null ? "" : ` · ${Math.round(scanConfidence * 100)}% CONFIDENCE`}`}</b><small>{scanError || scanWarnings[0] || "Review the totals and correct anything hidden or missed"}</small></div>}
             {phase === "quote" && <>
               <button className="edit-demo-boundary" onClick={toggleDemoBoundary}>{boundaryEditing ? "SAVE LOT OUTLINE" : "EDIT LOT OUTLINE"}</button>
+              <button className="add-demo-spot" onClick={() => addDemoSpot("stall")}>＋ ADD SPOT</button>
+              <button className="add-demo-ada" onClick={() => addDemoSpot("ada")}>＋ ADD ADA</button>
               {scanError && <button className="retry-demo-scan" onClick={retryDemoScan}>RETRY AI SCAN</button>}
+              <p className="demo-edit-hint">Drag any S / ADA icon to move it. Click an icon to remove it.</p>
               <div className="map-summary editable"><div><span>STALLS</span><b><button onClick={() => adjustDetectedCount("stalls", -1)} aria-label="Remove one stall">−</button>{mockQuote.stalls}<button onClick={() => adjustDetectedCount("stalls", 1)} aria-label="Add one stall">＋</button></b></div><div><span>ADA</span><b><button onClick={() => adjustDetectedCount("ada", -1)} aria-label="Remove one ADA stall">−</button>{mockQuote.ada}<button onClick={() => adjustDetectedCount("ada", 1)} aria-label="Add one ADA stall">＋</button></b></div><div><span>PATHS</span><b><button onClick={() => adjustDetectedCount("accessAisles", -1)} aria-label="Remove one path of travel">−</button>{mockQuote.accessAisles}<button onClick={() => adjustDetectedCount("accessAisles", 1)} aria-label="Add one path of travel">＋</button></b></div><div><span>ARROWS</span><b><button onClick={() => adjustDetectedCount("arrows", -1)} aria-label="Remove one arrow">−</button>{mockQuote.arrows}<button onClick={() => adjustDetectedCount("arrows", 1)} aria-label="Add one arrow">＋</button></b></div><div><span>LANES</span><b><button onClick={() => adjustDetectedCount("laneLines", -1)} aria-label="Remove one lane guide line">−</button>{mockQuote.laneLines}<button onClick={() => adjustDetectedCount("laneLines", 1)} aria-label="Add one lane guide line">＋</button></b></div><div><span>CROSSWALKS</span><b><button onClick={() => adjustDetectedCount("crosswalks", -1)} aria-label="Remove one crosswalk">−</button>{mockQuote.crosswalks}<button onClick={() => adjustDetectedCount("crosswalks", 1)} aria-label="Add one crosswalk">＋</button></b></div><div><span>SPEED BUMPS</span><b><button onClick={() => adjustDetectedCount("speedBumps", -1)} aria-label="Remove one speed bump">−</button>{mockQuote.speedBumps}<button onClick={() => adjustDetectedCount("speedBumps", 1)} aria-label="Add one speed bump">＋</button></b></div><div><span>STOP LINES</span><b><button onClick={() => adjustDetectedCount("stopBars", -1)} aria-label="Remove one solid stop line">−</button>{mockQuote.stopBars}<button onClick={() => adjustDetectedCount("stopBars", 1)} aria-label="Add one solid stop line">＋</button></b></div></div>
             </>}
           </div>

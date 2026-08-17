@@ -219,6 +219,15 @@
       "labels": { "halfBasketballCourts": 1, "halfPickleballCourts": 1 },
       "eligibleForWholeLotEvaluation": false,
       "notes": "Excluded from parking-lot counting."
+    },
+    {
+      "id": "3008-el-cajon",
+      "address": "3008 El Cajon Blvd, San Diego, CA 92104",
+      "source": "founder_verified_takeoff",
+      "scopeType": "whole_lot_restripe",
+      "labels": null,
+      "eligibleForWholeLotEvaluation": false,
+      "notes": "Blind label pending. Count the lot in /workspace before running any AI scan on it, confirm Counts verified, then SUBMIT BLIND LABEL. Earlier scans of this address were AI-first, so only a fresh manual count qualifies as ground truth."
     }
   ],
   "holdouts": [

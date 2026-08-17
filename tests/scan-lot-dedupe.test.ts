@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { collapseSameRowDuplicates, mergeOverlappingDetections } from "../app/api/scan-lot/route";
+import { collapseSameRowDuplicates, mergeOverlappingDetections, tightenStallGeometry } from "../app/api/scan-lot/route";
 
 type Located = Parameters<typeof collapseSameRowDuplicates>[0][number];
 
@@ -56,5 +56,49 @@ describe("row-aware stall reconciliation", () => {
   it("keeps adjacent oriented stall polygons separate", () => {
     const detections = [polygonStall(0, "section-1", "north-01"), polygonStall(9.5, "section-2", "west-07")];
     expect(mergeOverlappingDetections(detections)).toHaveLength(2);
+  });
+
+  it("keeps adjacent stalls separate when model boxes are oversized but slot indices differ", () => {
+    const oversized = (centerX: number, slotIndex: number): Located => {
+      const located = stall(centerX, 0);
+      located.rowId = "east-row";
+      located.slotIndex = slotIndex;
+      const latitudeScale = 364_000;
+      const longitudeScale = latitudeScale * Math.cos(located.lat * Math.PI / 180);
+      return {
+        ...located,
+        geoCorners: [
+          { lat: located.lat - 14 / latitudeScale, lng: located.lng - 7 / longitudeScale },
+          { lat: located.lat - 14 / latitudeScale, lng: located.lng + 7 / longitudeScale },
+          { lat: located.lat + 14 / latitudeScale, lng: located.lng + 7 / longitudeScale },
+          { lat: located.lat + 14 / latitudeScale, lng: located.lng - 7 / longitudeScale },
+        ],
+      };
+    };
+    const detections = [0, 9, 18, 27].map((x, index) => oversized(x, index));
+    expect(mergeOverlappingDetections(detections)).toHaveLength(4);
+  });
+
+  it("shrinks oversized stall polygons toward one parking space", () => {
+    const located = stall(0, 0);
+    const latitudeScale = 364_000;
+    const longitudeScale = latitudeScale * Math.cos(located.lat * Math.PI / 180);
+    const oversized: Located = {
+      ...located,
+      geoCorners: [
+        { lat: located.lat - 14 / latitudeScale, lng: located.lng - 7 / longitudeScale },
+        { lat: located.lat - 14 / latitudeScale, lng: located.lng + 7 / longitudeScale },
+        { lat: located.lat + 14 / latitudeScale, lng: located.lng + 7 / longitudeScale },
+        { lat: located.lat + 14 / latitudeScale, lng: located.lng - 7 / longitudeScale },
+      ],
+    };
+    const before = oversized.geoCorners!;
+    const tightened = tightenStallGeometry(oversized).geoCorners!;
+    const edge = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) =>
+      Math.hypot((b.lng - a.lng) * 364_000, (b.lat - a.lat) * 364_000);
+    const beforeLong = Math.max(edge(before[0], before[1]), edge(before[2], before[3]));
+    const afterLong = Math.max(edge(tightened[0], tightened[1]), edge(tightened[2], tightened[3]));
+    expect(afterLong).toBeLessThan(beforeLong);
+    expect(afterLong).toBeLessThanOrEqual(22.5);
   });
 });

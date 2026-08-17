@@ -30,4 +30,11 @@ describe("live workspace AI scan", () => {
     expect(workspaceSource).not.toContain("prices.standard_stall");
     expect(workspaceSource).not.toContain("prices.ada_stall");
   });
+
+  it("lets reviewers drag spot icons and drop new stalls without drawing a polygon", () => {
+    expect(workspaceSource).toContain("function addSpotAtCenter");
+    expect(workspaceSource).toContain("＋ ADD SPOT");
+    expect(workspaceSource).toContain("draggable: annotation.reviewStatus !== \"rejected\"");
+    expect(workspaceSource).toContain("translateGeometry");
+  });
 });

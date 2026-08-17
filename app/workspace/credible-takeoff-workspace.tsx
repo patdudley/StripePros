@@ -112,6 +112,27 @@ function geometryFromLayer(layer: DrawLayer): TakeoffGeometry {
   return layer.toGeoJSON().geometry;
 }
 
+function translateGeometry(geometry: TakeoffGeometry, fromLat: number, fromLng: number, toLat: number, toLng: number): TakeoffGeometry {
+  const dLat = toLat - fromLat;
+  const dLng = toLng - fromLng;
+  if (geometry.type === "Point") return { type: "Point", coordinates: [toLng, toLat] };
+  if (geometry.type === "LineString") {
+    return { type: "LineString", coordinates: geometry.coordinates.map(([lng, lat]) => [lng + dLng, lat + dLat] as [number, number]) };
+  }
+  return {
+    type: "Polygon",
+    coordinates: geometry.coordinates.map((ring) => ring.map(([lng, lat]) => [lng + dLng, lat + dLat] as [number, number])),
+  };
+}
+
+function geometryCenter(geometry: TakeoffGeometry): [number, number] {
+  if (geometry.type === "Point") return [geometry.coordinates[1], geometry.coordinates[0]];
+  const ring = geometry.type === "Polygon" ? geometry.coordinates[0] : geometry.coordinates;
+  const lat = ring.reduce((sum, point) => sum + point[1], 0) / ring.length;
+  const lng = ring.reduce((sum, point) => sum + point[0], 0) / ring.length;
+  return [lat, lng];
+}
+
 function annotationShape(type: AnnotationType): DrawShape {
   if (type === "ada_access_aisle" || type === "crosswalk") return "Polygon";
   if (type === "painted_curb" || type === "stop_bar") return "Line";
@@ -385,32 +406,37 @@ export function CredibleTakeoffWorkspace({ aiScanningEnabled }: { aiScanningEnab
     annotationLayersRef.current.forEach((layer) => map.removeLayer(layer));
     annotationLayersRef.current.clear();
     for (const annotation of annotations) {
-      let layer: DrawLayer;
-      if (annotation.geometry.type === "Point") {
-        const [lng, lat] = annotation.geometry.coordinates;
-        layer = L.marker([lat, lng], { icon: L.divIcon({ className: `typed-annotation-marker type-${annotation.type}`, html: TYPE_SHORT[annotation.type], iconSize: [38, 24], iconAnchor: [19, 12] }) }) as unknown as DrawLayer;
-      } else {
-        const group = L.geoJSON({ type: "Feature", properties: {}, geometry: annotation.geometry } as never, { style: annotationStyle(annotation) });
-        layer = group.getLayers()[0] as DrawLayer;
+      const group = L.layerGroup().addTo(map);
+      const [centerLat, centerLng] = geometryCenter(annotation.geometry);
+      if (annotation.geometry.type !== "Point") {
+        const outline = L.geoJSON({ type: "Feature", properties: {}, geometry: annotation.geometry } as never, {
+          style: { ...annotationStyle(annotation), interactive: false },
+        });
+        outline.addTo(group);
       }
-      layer.addTo(map);
-      layer.bindTooltip?.(`${TYPE_LABELS[annotation.type]} · ${annotation.reviewStatus}`, { direction: "top" });
-      layer.on("click", () => setSelectedAnnotationId(annotation.id));
-      layer.on("pm:edit", () => updateAnnotationGeometry(annotation.id, geometryFromLayer(layer)));
-      layer.on("pm:dragend", () => updateAnnotationGeometry(annotation.id, geometryFromLayer(layer)));
+      const marker = L.marker([centerLat, centerLng], {
+        draggable: annotation.reviewStatus !== "rejected",
+        autoPan: true,
+        bubblingMouseEvents: false,
+        icon: L.divIcon({
+          className: `typed-annotation-marker type-${annotation.type} demo-count-draggable`,
+          html: TYPE_SHORT[annotation.type],
+          iconSize: [38, 24],
+          iconAnchor: [19, 12],
+        }),
+      }).addTo(group);
+      marker.bindTooltip(`${TYPE_LABELS[annotation.type]} · drag to move · ${annotation.reviewStatus}`, { direction: "top" });
+      marker.on("click", () => setSelectedAnnotationId(annotation.id));
+      marker.on("dragend", () => {
+        const { lat, lng } = marker.getLatLng();
+        updateAnnotationGeometry(annotation.id, translateGeometry(annotation.geometry, centerLat, centerLng, lat, lng));
+      });
+      const layer = group as unknown as DrawLayer;
       annotationLayersRef.current.set(annotation.id, layer);
     }
     // Geometry edit callbacks intentionally use the current annotation ref.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [annotations]);
-
-  useEffect(() => {
-    annotationLayersRef.current.forEach((layer, id) => {
-      if (!layer.pm) return;
-      if (id === selectedAnnotationId) layer.pm.enable({ allowSelfIntersection: false, draggable: true });
-      else layer.pm.disable();
-    });
-  }, [selectedAnnotationId, annotations]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -530,6 +556,28 @@ export function CredibleTakeoffWorkspace({ aiScanningEnabled }: { aiScanningEnab
     const shape: DrawShape = intent === "boundary" || intent === "exclusion" ? "Polygon" : intent === "row" ? "Line" : intent ? annotationShape(intent) : "Marker";
     map.pm.enableDraw(shape, { snappable: true, continueDrawing: false, allowSelfIntersection: false });
     setMessage(intent === "row" ? "Click the beginning and end of the stall row." : `Draw ${intent ? String(intent).replaceAll("_", " ") : "annotation"} on the map.`);
+  }
+
+  function addSpotAtCenter(type: "standard_stall" | "ada_stall" = "standard_stall") {
+    const map = mapRef.current;
+    if (!map || !boundary) {
+      setMessage("Draw the lot boundary before adding a spot.");
+      return;
+    }
+    const center = map.getCenter();
+    const annotation: TakeoffAnnotation = {
+      id: crypto.randomUUID(),
+      type,
+      label: `${TYPE_LABELS[type]} ${annotationsRef.current.filter((item) => item.type === type).length + 1}`,
+      geometry: { type: "Point", coordinates: [center.lng, center.lat] },
+      provenance: "manual",
+      reviewStatus: "accepted",
+      service,
+    };
+    replaceAnnotations([...annotationsRef.current, annotation]);
+    setSelectedAnnotationId(annotation.id);
+    setCountsVerified(false);
+    setMessage(`${TYPE_LABELS[type]} added at the map center. Drag the icon onto the stall.`);
   }
 
   function recordModelCorrection(annotation: TakeoffAnnotation, action: "geometry_edited" | "type_changed" | "status_changed" | "deleted", after: unknown) {
@@ -798,7 +846,7 @@ export function CredibleTakeoffWorkspace({ aiScanningEnabled }: { aiScanningEnab
       <div className={`map-stage ${scanning ? "scanning" : ""}`}>
         <div ref={mapElementRef} className={MAP_CLASS_NAME} data-drawing={Boolean(drawingIntent)} />
         {!aiScanningEnabled && <div className="workspace-scanning-suspended" role="status"><strong>AUTOMATED DETECTION PAUSED</strong><span>Pending imagery licensing. Draw the lot and use the manual annotation tools.</span></div>}
-        <div className="map-workflow-strip"><button className={!boundary ? "primary" : ""} onClick={() => startDraw("boundary")}>{boundary ? "REDRAW LOT" : "1 · DRAW LOT"}</button><button disabled={!boundary} onClick={() => startDraw("exclusion")}>＋ EXCLUSION</button><button disabled={!boundary} onClick={() => setBoundaryEditing((value) => !value)}>{boundaryEditing ? "SAVE BOUNDARY" : "EDIT BOUNDARY"}</button>{aiScanningEnabled && boundary && !scanning && <button className="retry-workspace-scan" onClick={() => void runAiScan()}>{scanError ? "RETRY AI SCAN" : "RE-SCAN LOT"}</button>}</div>
+        <div className="map-workflow-strip"><button className={!boundary ? "primary" : ""} onClick={() => startDraw("boundary")}>{boundary ? "REDRAW LOT" : "1 · DRAW LOT"}</button><button disabled={!boundary} onClick={() => startDraw("exclusion")}>＋ EXCLUSION</button><button disabled={!boundary} onClick={() => setBoundaryEditing((value) => !value)}>{boundaryEditing ? "SAVE BOUNDARY" : "EDIT BOUNDARY"}</button><button disabled={!boundary} onClick={() => addSpotAtCenter("standard_stall")}>＋ ADD SPOT</button><button disabled={!boundary} onClick={() => addSpotAtCenter("ada_stall")}>＋ ADD ADA</button>{aiScanningEnabled && boundary && !scanning && <button className="retry-workspace-scan" onClick={() => void runAiScan()}>{scanError ? "RETRY AI SCAN" : "RE-SCAN LOT"}</button>}</div>
         {Boolean(exclusions.length) && <div className="exclusion-list"><strong>EXCLUSIONS</strong>{exclusions.map((exclusion) => <div key={exclusion.id}><button className={selectedExclusionId === exclusion.id ? "selected" : ""} onClick={() => setSelectedExclusionId(exclusion.id)}>{exclusion.type.replaceAll("_", " ")}</button><button aria-label={`Delete ${exclusion.type} exclusion`} onClick={() => { setExclusions((current) => current.filter((item) => item.id !== exclusion.id)); if (selectedExclusionId === exclusion.id) setSelectedExclusionId(null); }}>×</button></div>)}</div>}
         <div className="map-history-tools"><button onClick={undo} disabled={!undoRef.current.length}>↶ UNDO</button><button onClick={redo} disabled={!redoRef.current.length}>↷ REDO</button></div>
         {drawingIntent && <div className="drawing-status">DRAWING {String(drawingIntent).replaceAll("_", " ").toUpperCase()} · CLICK MAP TO COMPLETE</div>}

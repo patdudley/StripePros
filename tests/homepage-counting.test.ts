@@ -20,9 +20,7 @@ describe("homepage lot counting", () => {
   });
 
   it("keeps every detected category manually correctable", () => {
-    expect(homepageSource).toContain('marking.type === "stall"');
-    expect(homepageSource).toContain('marking.type === "ada"');
-    expect(homepageSource).toContain('marking.type === "arrow"');
+    expect(homepageSource).toContain("MARKING_COUNT_KEY");
     expect(homepageSource).toContain('adjustDetectedCount("stalls", -1)');
     expect(homepageSource).toContain('adjustDetectedCount("ada", -1)');
     expect(homepageSource).toContain('adjustDetectedCount("arrows", -1)');
@@ -30,6 +28,13 @@ describe("homepage lot counting", () => {
     expect(homepageSource).toContain('adjustDetectedCount("stopBars", -1)');
     expect(homepageSource).toContain('adjustDetectedCount("laneLines", -1)');
     expect(homepageSource).toContain('adjustDetectedCount("crosswalks", -1)');
+  });
+
+  it("lets reviewers drag spot icons and drop new ones on the map", () => {
+    expect(homepageSource).toContain("draggable: true");
+    expect(homepageSource).toContain("function addDemoSpot");
+    expect(homepageSource).toContain("＋ ADD SPOT");
+    expect(homepageSource).toContain("translateGeometry");
   });
 
   it("offers a real retry when the model times out", () => {

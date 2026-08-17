@@ -24,6 +24,13 @@ describe("AI lot scan route", () => {
     expect(routeSource).toContain("boundaryIncomplete");
   });
 
+  it("rebuilds rows as a lattice and removes stalls drawn over traffic lanes", () => {
+    expect(routeSource).toContain("reconstructRowLattice(suppressTrafficLaneStalls(mergeOverlappingDetections(located)))");
+    expect(routeSource).toContain("TRAFFIC LANE EXCLUSION");
+    expect(routeSource).toContain("CROSSWALK SWEEP");
+    expect(routeSource).toContain('item.type === "crosswalk"');
+  });
+
   it("walks complete rows and never labels one space both standard and ADA", () => {
     expect(routeSource).toContain("COMPLETE EVERY ROW");
     expect(routeSource).toContain("never return a stall and an ada detection for the same space");

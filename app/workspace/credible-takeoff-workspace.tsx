@@ -38,6 +38,7 @@ type LotScanResult = {
   speedBumps: number;
   stopBars: number;
   laneLines: number;
+  crosswalks: number;
   confidence: number;
   summary: string;
   warnings: string[];
@@ -45,7 +46,7 @@ type LotScanResult = {
   boundaryIncomplete: boolean;
   occludedRows: Array<{ sectionId: string; rowId: string; reason: string; confidence: number }>;
   detections: Array<{
-    type: "stall" | "ada" | "arrow" | "access_aisle" | "speed_bump" | "stop_bar" | "lane_line";
+    type: "stall" | "ada" | "arrow" | "access_aisle" | "speed_bump" | "stop_bar" | "lane_line" | "crosswalk";
     lat: number;
     lng: number;
     confidence: number;
@@ -606,7 +607,7 @@ export function CredibleTakeoffWorkspace({ aiScanningEnabled }: { aiScanningEnab
       if (!response.ok) throw new Error(result.error ?? "The AI scan could not be completed.");
 
       const modelAnnotations: TakeoffAnnotation[] = result.detections.map((detection, index) => {
-        const type: AnnotationType = detection.type === "stall" ? "standard_stall" : detection.type === "ada" ? "ada_stall" : detection.type === "access_aisle" ? "ada_access_aisle" : detection.type === "speed_bump" ? "speed_bump" : detection.type === "stop_bar" ? "stop_bar" : detection.type === "lane_line" ? "painted_curb" : "directional_arrow";
+        const type: AnnotationType = detection.type === "stall" ? "standard_stall" : detection.type === "ada" ? "ada_stall" : detection.type === "access_aisle" ? "ada_access_aisle" : detection.type === "speed_bump" ? "speed_bump" : detection.type === "stop_bar" ? "stop_bar" : detection.type === "lane_line" ? "painted_curb" : detection.type === "crosswalk" ? "crosswalk" : "directional_arrow";
         return {
           id: `model-${crypto.randomUUID()}-${index}`,
           type,
@@ -629,7 +630,7 @@ export function CredibleTakeoffWorkspace({ aiScanningEnabled }: { aiScanningEnab
       setScanProgress(100);
       setMessage(result.requiresManualConfirmation
         ? `${modelAnnotations.length} visible markings counted. Manual confirmation required for ${result.occludedRows.length} occluded row${result.occludedRows.length === 1 ? "" : "s"}: ${result.occludedRows.map((row) => row.rowId).join(", ")}.`
-        : `${modelAnnotations.length} visible markings counted: ${result.stalls} standard stalls, ${result.ada} blue ADA stalls, ${result.accessAisles} paths / access aisles, ${result.arrows} arrows, ${result.laneLines} lane guide lines, ${result.speedBumps} speed bumps, ${result.stopBars} solid stop lines. Review every marker before verifying.`);
+        : `${modelAnnotations.length} visible markings counted: ${result.stalls} standard stalls, ${result.ada} blue ADA stalls, ${result.accessAisles} paths / access aisles, ${result.arrows} arrows, ${result.laneLines} lane guide lines, ${result.crosswalks} crosswalks, ${result.speedBumps} speed bumps, ${result.stopBars} solid stop lines. Review every marker before verifying.`);
       await new Promise((resolve) => window.setTimeout(resolve, 350));
     } catch (error) {
       const detail = error instanceof Error ? error.message : "The AI scan could not be completed.";

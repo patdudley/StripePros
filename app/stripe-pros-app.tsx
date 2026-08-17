@@ -26,10 +26,10 @@ type DemoBoundary = LeafletPolygon & {
   toGeoJSON(): Parameters<typeof turfArea>[0];
 };
 type DemoGeomanMap = LeafletMap & { pm: { enableDraw(shape: "Polygon", options?: Record<string, unknown>): void; disableDraw(): void } };
-type DemoMarkingType = "stall" | "ada" | "arrow" | "access_aisle" | "speed_bump" | "stop_bar" | "lane_line";
+type DemoMarkingType = "stall" | "ada" | "arrow" | "access_aisle" | "speed_bump" | "stop_bar" | "lane_line" | "crosswalk";
 type DemoMarking = { id: string; type: DemoMarkingType; lat: number; lng: number; geometry: TakeoffGeometry; visibility: "visible" | "partially_supported" };
-type DemoCounts = { stalls: number; ada: number; arrows: number; accessAisles: number; speedBumps: number; stopBars: number; laneLines: number };
-const EMPTY_DEMO_COUNTS: DemoCounts = { stalls: 0, ada: 0, arrows: 0, accessAisles: 0, speedBumps: 0, stopBars: 0, laneLines: 0 };
+type DemoCounts = { stalls: number; ada: number; arrows: number; accessAisles: number; speedBumps: number; stopBars: number; laneLines: number; crosswalks: number };
+const EMPTY_DEMO_COUNTS: DemoCounts = { stalls: 0, ada: 0, arrows: 0, accessAisles: 0, speedBumps: 0, stopBars: 0, laneLines: 0, crosswalks: 0 };
 type LotScanResult = DemoCounts & {
   scanId: string;
   confidence: number;
@@ -190,12 +190,12 @@ function ProductDemo({ aiScanningEnabled }: { aiScanningEnabled: boolean }) {
     demoMarkingLayersRef.current.forEach((marker) => map.removeLayer(marker));
     demoMarkingLayersRef.current.clear();
     for (const marking of demoMarkings) {
-      const label = marking.type === "ada" ? "ADA" : marking.type === "arrow" ? "↑" : marking.type === "access_aisle" ? "PATH" : marking.type === "speed_bump" ? "BUMP" : marking.type === "stop_bar" ? "STOP" : marking.type === "lane_line" ? "LANE" : "S";
+      const label = marking.type === "ada" ? "ADA" : marking.type === "arrow" ? "↑" : marking.type === "access_aisle" ? "PATH" : marking.type === "speed_bump" ? "BUMP" : marking.type === "stop_bar" ? "STOP" : marking.type === "lane_line" ? "LANE" : marking.type === "crosswalk" ? "WALK" : "S";
       const layer = marking.geometry.type === "Polygon"
         ? L.geoJSON({ type: "Feature", properties: {}, geometry: marking.geometry } as never, {
           style: {
-            color: marking.type === "ada" ? "#2f8cff" : marking.type === "access_aisle" ? "#58a6ff" : marking.type === "lane_line" ? "#ffffff" : "#ffb400",
-            fillColor: marking.type === "ada" ? "#2f8cff" : marking.type === "access_aisle" ? "#58a6ff" : marking.type === "lane_line" ? "#ffffff" : "#ffb400",
+            color: marking.type === "ada" ? "#2f8cff" : marking.type === "access_aisle" ? "#58a6ff" : marking.type === "lane_line" || marking.type === "crosswalk" ? "#ffffff" : "#ffb400",
+            fillColor: marking.type === "ada" ? "#2f8cff" : marking.type === "access_aisle" ? "#58a6ff" : marking.type === "lane_line" || marking.type === "crosswalk" ? "#ffffff" : "#ffb400",
             weight: marking.type === "stall" || marking.type === "ada" ? 1.5 : marking.type === "lane_line" ? 3 : 2,
             fillOpacity: marking.type === "stall" || marking.type === "ada" ? .12 : marking.type === "lane_line" ? .55 : .2,
             dashArray: marking.visibility === "partially_supported" ? "5 4" : undefined,
@@ -208,10 +208,10 @@ function ProductDemo({ aiScanningEnabled }: { aiScanningEnabled: boolean }) {
       if (marking.geometry.type === "Polygon") layer.bindTooltip(label, { permanent: true, direction: "center", className: `demo-count-marker demo-count-${marking.type}` });
       layer.on("click", () => {
         setDemoMarkings((current) => current.filter((item) => item.id !== marking.id));
-        const key = marking.type === "stall" ? "stalls" : marking.type === "ada" ? "ada" : marking.type === "arrow" ? "arrows" : marking.type === "speed_bump" ? "speedBumps" : marking.type === "stop_bar" ? "stopBars" : marking.type === "lane_line" ? "laneLines" : "accessAisles";
+        const key = marking.type === "stall" ? "stalls" : marking.type === "ada" ? "ada" : marking.type === "arrow" ? "arrows" : marking.type === "speed_bump" ? "speedBumps" : marking.type === "stop_bar" ? "stopBars" : marking.type === "lane_line" ? "laneLines" : marking.type === "crosswalk" ? "crosswalks" : "accessAisles";
         setDetectedCounts((current) => ({ ...current, [key]: Math.max(0, current[key] - 1) }));
       });
-      if (marking.geometry.type !== "Polygon") layer.bindTooltip(`Remove ${marking.type === "ada" ? "ADA stall" : marking.type === "access_aisle" ? "path / access aisle" : marking.type === "stop_bar" ? "solid stop line" : marking.type === "lane_line" ? "lane guide line" : marking.type}`, { direction: "top" });
+      if (marking.geometry.type !== "Polygon") layer.bindTooltip(`Remove ${marking.type === "ada" ? "ADA stall" : marking.type === "access_aisle" ? "path / access aisle" : marking.type === "stop_bar" ? "solid stop line" : marking.type === "lane_line" ? "lane guide line" : marking.type === "crosswalk" ? "crosswalk" : marking.type}`, { direction: "top" });
       demoMarkingLayersRef.current.set(marking.id, layer);
     }
   }, [demoMarkings]);
@@ -250,7 +250,7 @@ function ProductDemo({ aiScanningEnabled }: { aiScanningEnabled: boolean }) {
         });
         if (controller.signal.aborted || !demoMapRef.current || !demoMapElementRef.current) return;
 
-        setDetectedCounts({ stalls: result.stalls, ada: result.ada, arrows: result.arrows, accessAisles: result.accessAisles, speedBumps: result.speedBumps, stopBars: result.stopBars, laneLines: result.laneLines });
+        setDetectedCounts({ stalls: result.stalls, ada: result.ada, arrows: result.arrows, accessAisles: result.accessAisles, speedBumps: result.speedBumps, stopBars: result.stopBars, laneLines: result.laneLines, crosswalks: result.crosswalks });
         setScanConfidence(result.confidence);
         setScanWarnings([
           ...result.occludedRows.map((row) => `${row.rowId}: ${row.reason}`),
@@ -469,7 +469,8 @@ function ProductDemo({ aiScanningEnabled }: { aiScanningEnabled: boolean }) {
     const speedBumps = detectedCounts.speedBumps + demoMarkings.filter((marking) => marking.source === "manual" && marking.type === "speed_bump").length;
     const stopBars = detectedCounts.stopBars + demoMarkings.filter((marking) => marking.source === "manual" && marking.type === "stop_bar").length;
     const laneLines = detectedCounts.laneLines + demoMarkings.filter((marking) => marking.source === "manual" && marking.type === "lane_line").length;
-    return { stalls, ada, arrows, accessAisles, speedBumps, stopBars, laneLines, lotArea, total: stalls * 5 + ada * 35 + arrows * 15 + accessAisles * 55 + speedBumps * 35 + stopBars * 25 + laneLines * 12 };
+    const crosswalks = detectedCounts.crosswalks + demoMarkings.filter((marking) => marking.source === "manual" && marking.type === "crosswalk").length;
+    return { stalls, ada, arrows, accessAisles, speedBumps, stopBars, laneLines, crosswalks, lotArea, total: stalls * 5 + ada * 35 + arrows * 15 + accessAisles * 55 + speedBumps * 35 + stopBars * 25 + laneLines * 12 + crosswalks * 75 };
   }, [demoMarkings, detectedCounts, lotArea]);
 
   const propertyParts = selectedSite?.label.split(",").map((part) => part.trim()) ?? [];
@@ -518,11 +519,11 @@ function ProductDemo({ aiScanningEnabled }: { aiScanningEnabled: boolean }) {
             {phase === "paused" && <div className="scanning-suspended-notice" role="status"><strong>AUTOMATED COUNTING IS PAUSED</strong><span>We are licensing imagery approved for machine analysis. Your lot boundary is ready for a manual takeoff.</span><a href="/workspace">OPEN MANUAL WORKSPACE →</a></div>}
             {phase === "scanning" && <><div className="scan-line"><span>{scanStageLabel}</span></div><div className="scan-progress-panel" role="status" aria-live="polite"><i>{scanProgress}%</i><div><strong>ANALYZING PARKING MARKINGS</strong><span><b style={{ width: `${scanProgress}%` }} /></span><small>ESTIMATED PROGRESS · VERIFY RESULTS WHEN COMPLETE</small></div></div></>}
             {(phase === "selecting" || phase === "paused" || phase === "scanning" || phase === "quote") && <div className="scan-hud"><strong>{phase === "selecting" ? "MANUAL LOT SELECTION" : phase === "paused" ? "MANUAL TAKEOFF AVAILABLE" : phase === "scanning" ? scanStageLabel : scanError ? "SCAN NEEDS MANUAL REVIEW" : "AI COUNT COMPLETE — REVIEW BELOW"}</strong></div>}
-            {phase === "quote" && <div className="sample-detection-overlay"><b>{scanError ? "SCAN COULD NOT VERIFY MARKINGS" : `${mockQuote.stalls + mockQuote.ada + mockQuote.accessAisles + mockQuote.arrows + mockQuote.speedBumps + mockQuote.stopBars + mockQuote.laneLines} MARKINGS COUNTED${scanConfidence === null ? "" : ` · ${Math.round(scanConfidence * 100)}% CONFIDENCE`}`}</b><small>{scanError || scanWarnings[0] || "Review the totals and correct anything hidden or missed"}</small></div>}
+            {phase === "quote" && <div className="sample-detection-overlay"><b>{scanError ? "SCAN COULD NOT VERIFY MARKINGS" : `${mockQuote.stalls + mockQuote.ada + mockQuote.accessAisles + mockQuote.arrows + mockQuote.speedBumps + mockQuote.stopBars + mockQuote.laneLines + mockQuote.crosswalks} MARKINGS COUNTED${scanConfidence === null ? "" : ` · ${Math.round(scanConfidence * 100)}% CONFIDENCE`}`}</b><small>{scanError || scanWarnings[0] || "Review the totals and correct anything hidden or missed"}</small></div>}
             {phase === "quote" && <>
               <button className="edit-demo-boundary" onClick={toggleDemoBoundary}>{boundaryEditing ? "SAVE LOT OUTLINE" : "EDIT LOT OUTLINE"}</button>
               {scanError && <button className="retry-demo-scan" onClick={retryDemoScan}>RETRY AI SCAN</button>}
-              <div className="map-summary editable"><div><span>STALLS</span><b><button onClick={() => adjustDetectedCount("stalls", -1)} aria-label="Remove one stall">−</button>{mockQuote.stalls}<button onClick={() => adjustDetectedCount("stalls", 1)} aria-label="Add one stall">＋</button></b></div><div><span>ADA</span><b><button onClick={() => adjustDetectedCount("ada", -1)} aria-label="Remove one ADA stall">−</button>{mockQuote.ada}<button onClick={() => adjustDetectedCount("ada", 1)} aria-label="Add one ADA stall">＋</button></b></div><div><span>PATHS</span><b><button onClick={() => adjustDetectedCount("accessAisles", -1)} aria-label="Remove one path of travel">−</button>{mockQuote.accessAisles}<button onClick={() => adjustDetectedCount("accessAisles", 1)} aria-label="Add one path of travel">＋</button></b></div><div><span>ARROWS</span><b><button onClick={() => adjustDetectedCount("arrows", -1)} aria-label="Remove one arrow">−</button>{mockQuote.arrows}<button onClick={() => adjustDetectedCount("arrows", 1)} aria-label="Add one arrow">＋</button></b></div><div><span>LANES</span><b><button onClick={() => adjustDetectedCount("laneLines", -1)} aria-label="Remove one lane guide line">−</button>{mockQuote.laneLines}<button onClick={() => adjustDetectedCount("laneLines", 1)} aria-label="Add one lane guide line">＋</button></b></div><div><span>SPEED BUMPS</span><b><button onClick={() => adjustDetectedCount("speedBumps", -1)} aria-label="Remove one speed bump">−</button>{mockQuote.speedBumps}<button onClick={() => adjustDetectedCount("speedBumps", 1)} aria-label="Add one speed bump">＋</button></b></div><div><span>STOP LINES</span><b><button onClick={() => adjustDetectedCount("stopBars", -1)} aria-label="Remove one solid stop line">−</button>{mockQuote.stopBars}<button onClick={() => adjustDetectedCount("stopBars", 1)} aria-label="Add one solid stop line">＋</button></b></div></div>
+              <div className="map-summary editable"><div><span>STALLS</span><b><button onClick={() => adjustDetectedCount("stalls", -1)} aria-label="Remove one stall">−</button>{mockQuote.stalls}<button onClick={() => adjustDetectedCount("stalls", 1)} aria-label="Add one stall">＋</button></b></div><div><span>ADA</span><b><button onClick={() => adjustDetectedCount("ada", -1)} aria-label="Remove one ADA stall">−</button>{mockQuote.ada}<button onClick={() => adjustDetectedCount("ada", 1)} aria-label="Add one ADA stall">＋</button></b></div><div><span>PATHS</span><b><button onClick={() => adjustDetectedCount("accessAisles", -1)} aria-label="Remove one path of travel">−</button>{mockQuote.accessAisles}<button onClick={() => adjustDetectedCount("accessAisles", 1)} aria-label="Add one path of travel">＋</button></b></div><div><span>ARROWS</span><b><button onClick={() => adjustDetectedCount("arrows", -1)} aria-label="Remove one arrow">−</button>{mockQuote.arrows}<button onClick={() => adjustDetectedCount("arrows", 1)} aria-label="Add one arrow">＋</button></b></div><div><span>LANES</span><b><button onClick={() => adjustDetectedCount("laneLines", -1)} aria-label="Remove one lane guide line">−</button>{mockQuote.laneLines}<button onClick={() => adjustDetectedCount("laneLines", 1)} aria-label="Add one lane guide line">＋</button></b></div><div><span>CROSSWALKS</span><b><button onClick={() => adjustDetectedCount("crosswalks", -1)} aria-label="Remove one crosswalk">−</button>{mockQuote.crosswalks}<button onClick={() => adjustDetectedCount("crosswalks", 1)} aria-label="Add one crosswalk">＋</button></b></div><div><span>SPEED BUMPS</span><b><button onClick={() => adjustDetectedCount("speedBumps", -1)} aria-label="Remove one speed bump">−</button>{mockQuote.speedBumps}<button onClick={() => adjustDetectedCount("speedBumps", 1)} aria-label="Add one speed bump">＋</button></b></div><div><span>STOP LINES</span><b><button onClick={() => adjustDetectedCount("stopBars", -1)} aria-label="Remove one solid stop line">−</button>{mockQuote.stopBars}<button onClick={() => adjustDetectedCount("stopBars", 1)} aria-label="Add one solid stop line">＋</button></b></div></div>
             </>}
           </div>
           <div className={`quote-preview demo-stage-block ${phase === "quote" ? "revealed" : ""}`}>
@@ -535,6 +536,7 @@ function ProductDemo({ aiScanningEnabled }: { aiScanningEnabled: boolean }) {
               <div><span>Paths of travel / access aisles <small>{mockQuote.accessAisles} × $55.00</small></span><b>${(mockQuote.accessAisles * 55).toFixed(2)}</b></div>
               <div><span>Directional arrows <small>{mockQuote.arrows} × $15.00</small></span><b>${(mockQuote.arrows * 15).toFixed(2)}</b></div>
               <div><span>Lane guide lines <small>{mockQuote.laneLines} × $12.00</small></span><b>${(mockQuote.laneLines * 12).toFixed(2)}</b></div>
+              <div><span>Crosswalks <small>{mockQuote.crosswalks} × $75.00</small></span><b>${(mockQuote.crosswalks * 75).toFixed(2)}</b></div>
               <div><span>Speed bumps <small>{mockQuote.speedBumps} × $35.00</small></span><b>${(mockQuote.speedBumps * 35).toFixed(2)}</b></div>
               <div><span>Solid stop lines <small>{mockQuote.stopBars} × $25.00</small></span><b>${(mockQuote.stopBars * 25).toFixed(2)}</b></div>
             </div>

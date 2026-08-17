@@ -58,6 +58,8 @@ describe("AI lot scan route", () => {
 
   it("runs focused sections concurrently, then reconciles them in a whole-lot verification pass", () => {
     expect(routeSource).toContain("mapWithConcurrency(sections, sections.length");
+    expect(routeSource).toContain("tightenStallGeometry");
+    expect(routeSource).toContain("~9 ft × 18 ft");
     expect(routeSource).toContain("runVisionPass(apiKey, address, sections, verificationController.signal, firstPass, correctionExamples)");
     expect(routeSource).toContain("max_output_tokens: verificationSource ? 16_000 : 12_000");
     expect(routeSource).toContain("parseScanPayload");

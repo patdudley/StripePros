@@ -180,14 +180,71 @@ function signedArea(points: PlanePoint[]) {
   }, 0) / 2;
 }
 
+function projectFeet(point: LocatedCorner, originLat: number, originLng: number): PlanePoint {
+  return {
+    x: (point.lng - originLng) * 364_000 * Math.cos(originLat * Math.PI / 180),
+    y: (point.lat - originLat) * 364_000,
+  };
+}
+
+function unprojectFeet(point: PlanePoint, originLat: number, originLng: number): LocatedCorner {
+  return {
+    lat: originLat + point.y / 364_000,
+    lng: originLng + point.x / (364_000 * Math.cos(originLat * Math.PI / 180)),
+  };
+}
+
+const STALL_MAX_WIDTH_FT = 10;
+const STALL_MAX_DEPTH_FT = 22;
+
+export function tightenStallGeometry(detection: LocatedDetection): LocatedDetection {
+  if ((detection.type !== "stall" && detection.type !== "ada") || detection.geoCorners?.length !== 4) return detection;
+  const originLat = detection.geoCorners.reduce((sum, corner) => sum + corner.lat, 0) / 4;
+  const originLng = detection.geoCorners.reduce((sum, corner) => sum + corner.lng, 0) / 4;
+  const points = detection.geoCorners.map((corner) => projectFeet(corner, originLat, originLng));
+  const edgeLength = (start: PlanePoint, end: PlanePoint) => Math.hypot(end.x - start.x, end.y - start.y);
+  const edges = [
+    edgeLength(points[0], points[1]),
+    edgeLength(points[1], points[2]),
+    edgeLength(points[2], points[3]),
+    edgeLength(points[3], points[0]),
+  ];
+  const shortSide = Math.min(...edges);
+  const longSide = Math.max(...edges);
+  const scale = Math.min(1, STALL_MAX_WIDTH_FT / shortSide, STALL_MAX_DEPTH_FT / longSide);
+  if (scale >= 0.98) return detection;
+  const centerX = points.reduce((sum, point) => sum + point.x, 0) / 4;
+  const centerY = points.reduce((sum, point) => sum + point.y, 0) / 4;
+  const tightened = points.map((point) => ({
+    x: centerX + (point.x - centerX) * scale,
+    y: centerY + (point.y - centerY) * scale,
+  }));
+  return {
+    ...detection,
+    geoCorners: tightened.map((point) => unprojectFeet(point, originLat, originLng)),
+  };
+}
+
+function isDuplicateDetection(accepted: LocatedDetection, candidate: LocatedDetection) {
+  if (accepted.type !== candidate.type) return false;
+  if (accepted.type === "stall" || accepted.type === "ada") {
+    if (accepted.rowId === candidate.rowId && accepted.slotIndex !== candidate.slotIndex) return false;
+    if (accepted.rowId === candidate.rowId && accepted.slotIndex === candidate.slotIndex) return true;
+    const overlap = polygonOverlapRatio(accepted, candidate);
+    if (overlap > 0.55) return true;
+    if (overlap > 0.3 && distanceFeet(accepted, candidate) <= 4) return true;
+    return distanceFeet(accepted, candidate) <= 2.5;
+  }
+  if (polygonOverlapRatio(accepted, candidate) > 0.4) return true;
+  const threshold = accepted.sectionId === candidate.sectionId ? 2.5 : 5;
+  return distanceFeet(accepted, candidate) <= threshold;
+}
+
 function polygonOverlapRatio(a: LocatedDetection, b: LocatedDetection) {
   if (a.geoCorners?.length !== 4 || b.geoCorners?.length !== 4) return 0;
   const originLat = (a.lat + b.lat) / 2;
   const originLng = (a.lng + b.lng) / 2;
-  const project = (point: LocatedCorner): PlanePoint => ({
-    x: (point.lng - originLng) * 364_000 * Math.cos(originLat * Math.PI / 180),
-    y: (point.lat - originLat) * 364_000,
-  });
+  const project = (point: LocatedCorner): PlanePoint => projectFeet(point, originLat, originLng);
   const subject = a.geoCorners.map(project);
   let clip = b.geoCorners.map(project);
   if (signedArea(clip) < 0) clip = [...clip].reverse();
@@ -228,14 +285,10 @@ function distanceFeet(a: LocatedDetection, b: LocatedDetection) {
 }
 
 export function mergeOverlappingDetections(detections: LocatedDetection[]) {
-  const rowCollapsed = collapseSameRowDuplicates(detections);
+  const tightened = detections.map(tightenStallGeometry);
+  const rowCollapsed = collapseSameRowDuplicates(tightened);
   return [...rowCollapsed].sort((a, b) => b.confidence - a.confidence).reduce<LocatedDetection[]>((merged, candidate) => {
-    const duplicate = merged.some((accepted) => {
-      if (accepted.type !== candidate.type) return false;
-      if (polygonOverlapRatio(accepted, candidate) > .4) return true;
-      const threshold = accepted.sectionId === candidate.sectionId ? 2.5 : candidate.type === "stall" ? 6 : 5;
-      return distanceFeet(accepted, candidate) <= threshold;
-    });
+    const duplicate = merged.some((accepted) => isDuplicateDetection(accepted, candidate));
     if (!duplicate) merged.push(candidate);
     return merged;
   }, []);
@@ -362,7 +415,7 @@ async function runVisionPass(apiKey: string, address: string, sections: ScanSect
 Complete these sweeps in order before answering:
 1. ROW RECONSTRUCTION: identify each physical parking row, its dominant axis, angle, approximate stall width/depth, and both endpoints before counting any space.
 2. ORDERED SLOT LEDGER: walk each row from one endpoint to the other. Assign stable slotIndex values and exactly one ledger entry per physical space. Classify it as stall, ada, partially_supported via visibility, or unknown. A partial slot needs at least two independent evidence signals in evidence (for example both separator continuations, one separator plus curb rhythm, or vehicle alignment plus a matching row interval). At row terminals where divider rhythm or vehicle alignment continues to the curb, count the final slot as partially_supported with rowId boundary-edge- when one separator plus vehicle alignment OR curb rhythm is visible. Confidence below 0.50 must be visibility unknown and must not be returned as a counted detection; flag its row instead.
-3. ORIENTED GEOMETRY: return four tight corners for every detection, aligned to the actual painted space or marking. Corners must describe the physical rectangle, never a generic horizontal label. Reconcile overlapping crops geometrically: if two proposed rectangles cover the same physical space, return only the clearest one even when section rowIds differ. Adjacent slots remain separate.
+3. ORIENTED GEOMETRY: return four tight corners for every detection, aligned to the actual painted space or marking. Corners must describe the physical rectangle, never a generic horizontal label. For stall and ADA detections, each rectangle must fit entirely inside one ~9 ft × 18 ft parking space — never span two adjacent stalls. Oversized boxes cause undercounting downstream. Reconcile overlapping crops geometrically: if two proposed rectangles cover the same physical space, return only the clearest one even when section rowIds differ. Adjacent slots remain separate.
 4. SYMBOL SWEEPS — ARROW SWEEP, LANE LINE SWEEP, and PATH SWEEP: traverse every drive aisle for arrows and channelizing guide stripes, then independently inspect ADA paint, access aisles/paths, speed bumps, and solid stop bars.
 
 Apply the strict ADA rule: classify a stall as ada only when visible blue paint belongs to that stall or a legible wheelchair symbol is visible. A path can exist without an ADA stall. Do not classify an ADA stall solely because an access aisle is nearby. Count access_aisle independently. Count lane_line once for every visible longitudinal channelizing stripe that guides traffic through a drive aisle, drive-through lane, or fire lane — including curved paired guide lines beside arrows. Each continuous painted guide stripe is one lane_line; parallel stripes in the same channel count separately. Do not classify stall dividers, access_aisle hatching, or transverse stop_bar lines as lane_line. Count stop_bar once for every clearly visible solid transverse painted stop line. Count speed bumps separately and do not confuse stop bars, crosswalks, shadows, or pavement seams with speed bumps. If a row is genuinely obscured, add one precise occludedRows entry instead of inventing or silently omitting spaces. Do not silently omit an uncertain or boundary-truncated row. Inspect immediately outside the polygon for truncated rows and use a boundary-edge- rowId when expansion is needed. Never estimate from lot area. Do not echo first-pass duplicates.
@@ -373,7 +426,7 @@ SECTION BOUNDARIES:
 ${JSON.stringify(sectionGuide)}`
     : `Review this single focused high-resolution aerial section for ${address}. Count only pixels inside ${JSON.stringify(sectionGuide)}. The boundary is expanded ~6 meters beyond the user's outline so terminal row slots remain countable.
 
-Use a row-first procedure. Before outputting detections, reconstruct each parking row's dominant axis, angle, endpoints, and approximate stall width/depth. Then walk the row in order and build a slot ledger. Return exactly one detection per physical space, with a stable rowId and slotIndex. Never mark the entrance, vehicle center, and back line as separate stalls. For stall and ADA detections, corners must be the four oriented corners of the actual parking rectangle. For other markings, corners must tightly bound the painted marking. Do not return generic horizontal boxes.
+Use a row-first procedure. Before outputting detections, reconstruct each parking row's dominant axis, angle, endpoints, and approximate stall width/depth. Then walk the row in order and build a slot ledger. Return exactly one detection per physical space, with a stable rowId and slotIndex. Never mark the entrance, vehicle center, and back line as separate stalls. For stall and ADA detections, corners must be the four oriented corners of the actual parking rectangle (~9 ft wide × 18 ft deep). Each stall polygon must stay inside one space and must not cover any part of a neighboring stall. For other markings, corners must tightly bound the painted marking. Do not return generic horizontal boxes.
 
 TERMINAL SLOTS: Do not drop the last stall in a row just because it sits near the boundary edge. When divider lines or occupied vehicles continue with the same spacing, count the terminal slot. Use rowId prefix boundary-edge- and visibility partially_supported when only one separator plus vehicle alignment or curb rhythm supports the slot.
 

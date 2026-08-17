@@ -196,8 +196,8 @@ function ProductDemo({ aiScanningEnabled }: { aiScanningEnabled: boolean }) {
           style: {
             color: marking.type === "ada" ? "#2f8cff" : marking.type === "access_aisle" ? "#58a6ff" : marking.type === "lane_line" ? "#ffffff" : "#ffb400",
             fillColor: marking.type === "ada" ? "#2f8cff" : marking.type === "access_aisle" ? "#58a6ff" : marking.type === "lane_line" ? "#ffffff" : "#ffb400",
-            weight: marking.type === "lane_line" ? 3 : 2,
-            fillOpacity: marking.type === "lane_line" ? .55 : .2,
+            weight: marking.type === "stall" || marking.type === "ada" ? 1.5 : marking.type === "lane_line" ? 3 : 2,
+            fillOpacity: marking.type === "stall" || marking.type === "ada" ? .12 : marking.type === "lane_line" ? .55 : .2,
             dashArray: marking.visibility === "partially_supported" ? "5 4" : undefined,
           },
         }).addTo(map)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { collapseSameRowDuplicates, mergeOverlappingDetections, tightenStallGeometry } from "../app/api/scan-lot/route";
+import { collapseSameRowDuplicates, isDuplicateDetection, mergeOverlappingDetections, tightenStallGeometry } from "../app/api/scan-lot/route";
 
 type Located = Parameters<typeof collapseSameRowDuplicates>[0][number];
 
@@ -77,6 +77,26 @@ describe("row-aware stall reconciliation", () => {
     };
     const detections = [0, 9, 18, 27].map((x, index) => oversized(x, index));
     expect(mergeOverlappingDetections(detections)).toHaveLength(4);
+  });
+
+  it("keeps one ADA space when the model labels it both standard and ADA", () => {
+    const standard = polygonStall(0, "section-1", "east-01");
+    const accessible: Located = { ...polygonStall(.5, "section-2", "east-01"), type: "ada", slotIndex: 3, confidence: .8 };
+    const merged = mergeOverlappingDetections([standard, accessible]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].type).toBe("ada");
+  });
+
+  it("still merges stacked duplicates that share a row but were given different slot indices", () => {
+    const first = polygonStall(0, "section-1", "middle-row");
+    const stacked: Located = { ...polygonStall(1, "section-1", "middle-row"), slotIndex: 4, confidence: .7 };
+    expect(mergeOverlappingDetections([first, stacked])).toHaveLength(1);
+  });
+
+  it("treats near-identical centers as one space regardless of row labels", () => {
+    const first = stall(0, 0);
+    const second = { ...stall(2, 0), rowId: "other-row", slotIndex: 9 };
+    expect(isDuplicateDetection(first, second)).toBe(true);
   });
 
   it("shrinks oversized stall polygons toward one parking space", () => {

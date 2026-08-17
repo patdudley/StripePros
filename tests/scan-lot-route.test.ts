@@ -24,6 +24,12 @@ describe("AI lot scan route", () => {
     expect(routeSource).toContain("boundaryIncomplete");
   });
 
+  it("walks complete rows and never labels one space both standard and ADA", () => {
+    expect(routeSource).toContain("COMPLETE EVERY ROW");
+    expect(routeSource).toContain("never return a stall and an ada detection for the same space");
+    expect(routeSource).toContain('accepted.type === "stall" && candidate.type === "ada"');
+  });
+
   it("localizes visible ADA access aisles without inferring one from an ADA stall", () => {
     expect(routeSource).toContain('item.type === "access_aisle"');
     expect(routeSource).toContain("A path can exist without an ADA stall");

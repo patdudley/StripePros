@@ -189,13 +189,14 @@ button { cursor: pointer; }
 .map-summary.editable button { width: 20px; height: 20px; display: grid; place-items: center; border: 1px solid #5f5e56; background: transparent; color: white; padding: 0; line-height: 1; }
 .map-summary.editable button:hover { border-color: var(--amber); color: var(--amber); }
 .lot-canvas.marking .demo-real-map { cursor: crosshair; }
-.demo-count-marker { display: grid !important; place-items: center; border: 2px solid white; border-radius: 3px; background: var(--amber); color: var(--ink); box-shadow: 0 2px 8px rgba(0,0,0,.6); font: 900 8px Arial; }
-.demo-count-access_aisle { width: 38px !important; border-color: #d8eeff; background: repeating-linear-gradient(135deg, #2f8cff 0 5px, #d8eeff 5px 8px); color: #071b35; font-size: 6px; }
+.demo-count-marker { display: grid !important; place-items: center; padding: 0 !important; margin: 0 !important; white-space: nowrap; border: 1px solid rgba(255,255,255,.9); border-radius: 2px; background: var(--amber); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.55); font: 900 5px Arial; letter-spacing: .02em; }
+.demo-count-marker::before { display: none !important; }
+.demo-count-access_aisle { width: 22px !important; border-color: #d8eeff; background: repeating-linear-gradient(135deg, #2f8cff 0 3px, #d8eeff 3px 5px); color: #071b35; font-size: 4px; }
 .demo-count-ada { background: #2f8cff; color: white; }
-.demo-count-arrow { border-radius: 50%; background: #62d77c; font-size: 14px; }
-.demo-count-speed_bump { width: 42px !important; background: #ff7a45; color: #11110f; font-size: 6px; }
-.demo-count-stop_bar { width: 42px !important; background: #ff6b4a; color: #11110f; font-size: 6px; }
-.demo-count-lane_line { width: 42px !important; background: #ffffff; color: #11110f; font-size: 6px; border-color: #11110f; }
+.demo-count-arrow { border-radius: 50%; background: #62d77c; font-size: 8px; }
+.demo-count-speed_bump { width: 24px !important; background: #ff7a45; color: #11110f; font-size: 4px; }
+.demo-count-stop_bar { width: 24px !important; background: #ff6b4a; color: #11110f; font-size: 4px; }
+.demo-count-lane_line { width: 24px !important; background: #ffffff; color: #11110f; font-size: 4px; border-color: #11110f; }
 .quote-preview { background: #fbfaf6; padding: 24px 21px; opacity: .48; filter: grayscale(1); transition: opacity .5s ease, filter .5s ease, transform .5s ease; transform: translateX(5px); }
 .quote-preview.revealed { opacity: 1; filter: none; transform: translateX(0); }
 .quote-top { display: flex; justify-content: space-between; align-items: center; padding-bottom: 19px; border-bottom: 2px solid var(--ink); }

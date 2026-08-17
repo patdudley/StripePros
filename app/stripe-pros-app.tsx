@@ -203,7 +203,7 @@ function ProductDemo({ aiScanningEnabled }: { aiScanningEnabled: boolean }) {
         }).addTo(map)
         : L.marker([marking.lat, marking.lng], {
           bubblingMouseEvents: false,
-          icon: L.divIcon({ className: `demo-count-marker demo-count-${marking.type}`, html: label, iconSize: [30, 24], iconAnchor: [15, 12] }),
+          icon: L.divIcon({ className: `demo-count-marker demo-count-${marking.type}`, html: label, iconSize: [15, 11], iconAnchor: [7, 5] }),
         }).addTo(map);
       if (marking.geometry.type === "Polygon") layer.bindTooltip(label, { permanent: true, direction: "center", className: `demo-count-marker demo-count-${marking.type}` });
       layer.on("click", () => {

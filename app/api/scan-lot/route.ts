@@ -146,9 +146,8 @@ function normalizeOccludedRow(value: unknown, sectionIds: Set<string>): Occluded
 function detectionCountsTowardQuote(detection: ModelDetection) {
   if (detection.visibility === "unknown") return false;
   if (detection.confidence >= 0.5) return true;
-  return detection.visibility === "partially_supported"
-    && detection.confidence >= 0.45
-    && detection.rowId.toLowerCase().startsWith("boundary-edge-");
+  // A missed stall is invisible to the reviewer, while an extra marker is one click to remove.
+  return detection.visibility === "partially_supported" && detection.confidence >= 0.42;
 }
 
 function locateDetection(detection: ModelDetection, section: ScanSection): LocatedDetection {
@@ -225,15 +224,21 @@ export function tightenStallGeometry(detection: LocatedDetection): LocatedDetect
   };
 }
 
-function isDuplicateDetection(accepted: LocatedDetection, candidate: LocatedDetection) {
-  if (accepted.type !== candidate.type) return false;
-  if (accepted.type === "stall" || accepted.type === "ada") {
-    if (accepted.rowId === candidate.rowId && accepted.slotIndex !== candidate.slotIndex) return false;
-    if (accepted.rowId === candidate.rowId && accepted.slotIndex === candidate.slotIndex) return true;
+function isStallLike(type: DetectionType) {
+  return type === "stall" || type === "ada";
+}
+
+export function isDuplicateDetection(accepted: LocatedDetection, candidate: LocatedDetection) {
+  const bothStallLike = isStallLike(accepted.type) && isStallLike(candidate.type);
+  if (!bothStallLike && accepted.type !== candidate.type) return false;
+  if (bothStallLike) {
     const overlap = polygonOverlapRatio(accepted, candidate);
-    if (overlap > 0.55) return true;
-    if (overlap > 0.3 && distanceFeet(accepted, candidate) <= 4) return true;
-    return distanceFeet(accepted, candidate) <= 2.5;
+    const gap = distanceFeet(accepted, candidate);
+    // One physical space cannot hold two markings, however the model labelled the row.
+    if (overlap >= 0.45 || gap <= 3.5) return true;
+    // Distinct slots the model walked in the same row stay separate.
+    if (accepted.rowId === candidate.rowId && accepted.slotIndex !== candidate.slotIndex) return false;
+    return overlap >= 0.25 && gap <= 5;
   }
   if (polygonOverlapRatio(accepted, candidate) > 0.4) return true;
   const threshold = accepted.sectionId === candidate.sectionId ? 2.5 : 5;
@@ -288,8 +293,16 @@ export function mergeOverlappingDetections(detections: LocatedDetection[]) {
   const tightened = detections.map(tightenStallGeometry);
   const rowCollapsed = collapseSameRowDuplicates(tightened);
   return [...rowCollapsed].sort((a, b) => b.confidence - a.confidence).reduce<LocatedDetection[]>((merged, candidate) => {
-    const duplicate = merged.some((accepted) => isDuplicateDetection(accepted, candidate));
-    if (!duplicate) merged.push(candidate);
+    const duplicateIndex = merged.findIndex((accepted) => isDuplicateDetection(accepted, candidate));
+    if (duplicateIndex === -1) {
+      merged.push(candidate);
+      return merged;
+    }
+    // A space marked both standard and ADA is an ADA space; blue paint is the stricter signal.
+    const accepted = merged[duplicateIndex];
+    if (accepted.type === "stall" && candidate.type === "ada") {
+      merged[duplicateIndex] = { ...accepted, type: "ada", evidence: candidate.evidence, geoCorners: candidate.geoCorners ?? accepted.geoCorners };
+    }
     return merged;
   }, []);
 }
@@ -414,7 +427,7 @@ async function runVisionPass(apiKey: string, address: string, sections: ScanSect
 
 Complete these sweeps in order before answering:
 1. ROW RECONSTRUCTION: identify each physical parking row, its dominant axis, angle, approximate stall width/depth, and both endpoints before counting any space.
-2. ORDERED SLOT LEDGER: walk each row from one endpoint to the other. Assign stable slotIndex values and exactly one ledger entry per physical space. Classify it as stall, ada, partially_supported via visibility, or unknown. A partial slot needs at least two independent evidence signals in evidence (for example both separator continuations, one separator plus curb rhythm, or vehicle alignment plus a matching row interval). At row terminals where divider rhythm or vehicle alignment continues to the curb, count the final slot as partially_supported with rowId boundary-edge- when one separator plus vehicle alignment OR curb rhythm is visible. Confidence below 0.50 must be visibility unknown and must not be returned as a counted detection; flag its row instead.
+2. ORDERED SLOT LEDGER: walk each row from one endpoint to the other and cover the row's entire span at its measured stall pitch — empty spaces and spaces between parked cars still count, and perimeter rows along a curb or property line usually run the full edge. Each physical space is either standard or ADA, never both: never return a stall and an ada detection for the same space. Assign stable slotIndex values and exactly one ledger entry per physical space. Classify it as stall, ada, partially_supported via visibility, or unknown. A partial slot needs at least two independent evidence signals in evidence (for example both separator continuations, one separator plus curb rhythm, or vehicle alignment plus a matching row interval). At row terminals where divider rhythm or vehicle alignment continues to the curb, count the final slot as partially_supported with rowId boundary-edge- when one separator plus vehicle alignment OR curb rhythm is visible. Confidence below 0.50 must be visibility unknown and must not be returned as a counted detection; flag its row instead.
 3. ORIENTED GEOMETRY: return four tight corners for every detection, aligned to the actual painted space or marking. Corners must describe the physical rectangle, never a generic horizontal label. For stall and ADA detections, each rectangle must fit entirely inside one ~9 ft × 18 ft parking space — never span two adjacent stalls. Oversized boxes cause undercounting downstream. Reconcile overlapping crops geometrically: if two proposed rectangles cover the same physical space, return only the clearest one even when section rowIds differ. Adjacent slots remain separate.
 4. SYMBOL SWEEPS — ARROW SWEEP, LANE LINE SWEEP, and PATH SWEEP: traverse every drive aisle for arrows and channelizing guide stripes, then independently inspect ADA paint, access aisles/paths, speed bumps, and solid stop bars.
 
@@ -429,6 +442,8 @@ ${JSON.stringify(sectionGuide)}`
 Use a row-first procedure. Before outputting detections, reconstruct each parking row's dominant axis, angle, endpoints, and approximate stall width/depth. Then walk the row in order and build a slot ledger. Return exactly one detection per physical space, with a stable rowId and slotIndex. Never mark the entrance, vehicle center, and back line as separate stalls. For stall and ADA detections, corners must be the four oriented corners of the actual parking rectangle (~9 ft wide × 18 ft deep). Each stall polygon must stay inside one space and must not cover any part of a neighboring stall. For other markings, corners must tightly bound the painted marking. Do not return generic horizontal boxes.
 
 TERMINAL SLOTS: Do not drop the last stall in a row just because it sits near the boundary edge. When divider lines or occupied vehicles continue with the same spacing, count the terminal slot. Use rowId prefix boundary-edge- and visibility partially_supported when only one separator plus vehicle alignment or curb rhythm supports the slot.
+
+COMPLETE EVERY ROW: after locating a row's two endpoints, walk the full span and emit one detection for every space between them at the row's measured stall pitch. Empty spaces, faded paint, and spaces between parked cars still count. Perimeter rows along a curb, fence, or property line are frequently single-file and run the entire edge — do not stop partway. If the row's span divided by its stall pitch implies more spaces than you listed, re-inspect the row before answering rather than returning a short list.
 
 Visibility rules: visible means the physical slot is directly supported. partially_supported requires at least two independent evidence signals listed in evidence, such as both separator continuations, one separator plus curb rhythm, or vehicle alignment plus matching row intervals — except terminal boundary-edge- slots may use one separator plus vehicle alignment or curb rhythm. Confidence below 0.50 is unknown: omit the detection and add its row to occludedRows. Never infer a count from lot length or area. Treat rowIds as local labels only; overlap with adjacent crops is expected and will be reconciled geometrically.
 

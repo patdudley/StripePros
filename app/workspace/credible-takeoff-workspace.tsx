@@ -205,6 +205,8 @@ export function CredibleTakeoffWorkspace({ aiScanningEnabled }: { aiScanningEnab
   const [service, setService] = useState<StripingService>("restripe");
   const [includeMobilization, setIncludeMobilization] = useState(false);
   const [countsVerified, setCountsVerified] = useState(false);
+  const [aiScanUsed, setAiScanUsed] = useState(false);
+  const [submittingLabel, setSubmittingLabel] = useState(false);
   const [prices, setPrices] = useState<Record<string, number>>({ ...DEFAULT_TAKEOFF_PRICES });
   const [material, setMaterial] = useState<"paint" | "thermoplastic">("paint");
   const [imageryInfo, setImageryInfo] = useState({ provider: "esri", detail: "Standard imagery", currentZoom: 18, maxZoom: 19, nativeMaxZoom: 19 as number | null, fallback: false });
@@ -578,6 +580,7 @@ export function CredibleTakeoffWorkspace({ aiScanningEnabled }: { aiScanningEnab
     }
 
     setScanning(true);
+    setAiScanUsed(true);
     setScanProgress(6);
     setScanError("");
     setScanWarnings([]);
@@ -660,6 +663,47 @@ export function CredibleTakeoffWorkspace({ aiScanningEnabled }: { aiScanningEnab
   const adaStallPrice = prices[`ada_stall_${service}`] ?? DEFAULT_TAKEOFF_PRICES.ada_stall_restripe;
   const pavementArea = pavementAreaSqFt(boundary, exclusions);
   const canExport = Boolean(boundary && acceptedAnnotations.length && countsVerified);
+  const canSubmitLabel = Boolean(boundary && countsVerified && (counters.standard_stall ?? 0) + (counters.ada_stall ?? 0) > 0);
+
+  async function submitTrainingLabel() {
+    if (!canSubmitLabel) { setMessage("Draw the lot, count every stall, then confirm Counts verified before submitting a label."); return; }
+    const center = mapRef.current?.getCenter();
+    setSubmittingLabel(true);
+    try {
+      const response = await fetch("/api/lot-labels", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          address: siteAddress,
+          lat: selectedSite?.lat ?? center?.lat ?? DEFAULT_CENTER[0],
+          lng: selectedSite?.lng ?? center?.lng ?? DEFAULT_CENTER[1],
+          boundary,
+          // The label is only independent ground truth if no AI scan ran on this lot.
+          blind: !aiScanUsed,
+          wholeLotScope: true,
+          counts: {
+            standardStalls: counters.standard_stall ?? 0,
+            adaStalls: counters.ada_stall ?? 0,
+            accessAisles: counters.ada_access_aisle ?? 0,
+            arrows: counters.directional_arrow ?? 0,
+            laneLines: counters.painted_curb ?? 0,
+            crosswalks: counters.crosswalk ?? 0,
+            speedBumps: counters.speed_bump ?? 0,
+            stopBars: counters.stop_bar ?? 0,
+          },
+        }),
+      });
+      const result = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(result.error ?? "The label could not be saved.");
+      setMessage(aiScanUsed
+        ? "Label saved, but an AI scan already ran on this lot so it is recorded as not blind and will not count toward the benchmark."
+        : "Blind label saved. Open /api/lot-labels to copy the dataset record.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "The label could not be saved.");
+    } finally {
+      setSubmittingLabel(false);
+    }
+  }
 
   async function saveEstimate() {
     if (!boundary) { setMessage("Draw the lot boundary before saving."); return; }
@@ -722,7 +766,7 @@ export function CredibleTakeoffWorkspace({ aiScanningEnabled }: { aiScanningEnab
     <header className="quote-app-header">
       <Link className="quote-brand" href="/"><BrandMark /><span>STRIPE PROS</span></Link>
       <div className="quote-header-site"><span>TAKEOFF</span><strong>{siteAddress}</strong><small>{boundary ? `${number.format(pavementArea)} SQ FT PAVEMENT · ${acceptedAnnotations.length} ACCEPTED` : "ADDRESS → BOUNDARY → ANNOTATIONS → QUOTE"}</small></div>
-      <div className="quote-header-actions"><span className="autosave-status"><i /> {scanning ? "AI SCANNING" : aiScanningEnabled ? "AI + MANUAL TAKEOFF" : "MANUAL TAKEOFF"}</span><button onClick={() => void saveEstimate()}>SAVE DRAFT</button><button className="export-button" onClick={() => void exportProposal()} disabled={exporting || !canExport}>{exporting ? "GENERATING…" : "EXPORT PROPOSAL"} <b>→</b></button></div>
+      <div className="quote-header-actions"><span className="autosave-status"><i /> {scanning ? "AI SCANNING" : aiScanningEnabled ? "AI + MANUAL TAKEOFF" : "MANUAL TAKEOFF"}</span><button onClick={() => void saveEstimate()}>SAVE DRAFT</button><button onClick={() => void submitTrainingLabel()} disabled={submittingLabel || !canSubmitLabel}>{submittingLabel ? "SUBMITTING…" : aiScanUsed ? "SUBMIT LABEL (NOT BLIND)" : "SUBMIT BLIND LABEL"}</button><button className="export-button" onClick={() => void exportProposal()} disabled={exporting || !canExport}>{exporting ? "GENERATING…" : "EXPORT PROPOSAL"} <b>→</b></button></div>
     </header>
     <aside className="quote-sidebar">
       <p>WORKSPACE</p>
